@@ -35,5 +35,35 @@ def parse_blobs(content):
             logging.error("unexpected blob: " + blob)
     return points
 
-#def blobs2json(content):
+def geojson(points):
+    """Takes a simple points list and returns a data set that will
+    conform to the GEOJson RFC7946 format if saved through the json
+    module.  (There also exists a geojson module, should eventually
+    consider to use that)
+    """
+    points = [[points[0], points[1]] for point in points]
+    data={
+        'type': 'Feature',
+        'geometry': {
+            'type': 'LineString',
+            'coordinates': points
+        }
+    }
+    return data
     
+def jtt(points, title="Anchor drift", desc="Tracking of the vessel S/Y Solveig LJ6994 while staying by anchor"):
+    """
+    ref https://dret.typepad.com/dretblog/2015/11/gps-data-on-the-web.html
+    """
+    data = {
+        "JTT": [
+            { "track": {
+                "title": title,
+                "desc": desc,
+                "segments": [
+                    {"data-fields": ["latitude", "longitude", "timestamp"]},
+                    points
+                ]
+            }}
+        ]
+    }

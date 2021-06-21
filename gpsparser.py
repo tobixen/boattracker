@@ -7,12 +7,13 @@ sys.path.append('.')
 from geopy.distance import distance as geo_distance
 import itertools
 import parser
+import json
 
 points = []
 
 
 class Point:
-    def __init__(self, lat, long, ts="", colour="r", *largs, **kwargs) -> None:
+    def __init__(self, lat, long, ts="", colour="r") -> None:
         self.lat = lat
         self.long = long
         self.colour = colour
@@ -95,3 +96,9 @@ print(finnurl)
 
 print(points[-1].ts)
 print(points[-1].distance_to(midpoint))
+
+with open('anchoring-geojson.json', 'w') as f:
+    json.dump(parser.geojson(data), f)
+
+with open('anchoring-jtt.json', 'w') as f:
+    json.dump(parser.jtt(data), f)
