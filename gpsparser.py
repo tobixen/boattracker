@@ -2,6 +2,8 @@
 
 import sys
 
+__version__ = '0.0.1'
+
 from geopy.distance import distance as geo_distance
 import itertools
 import json
@@ -63,6 +65,7 @@ def redux(points, min_dist, max_points):
 def find_distance(pos1, pos2):
     return geo_distance(pos1.tuple,pos2.tuple).meters
 
+logging.debug(__version__)
 finnpoints=redux(points, 3.0, 186)
 
 
