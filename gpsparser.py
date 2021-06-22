@@ -16,7 +16,7 @@ from secret import push_token
 
 points = []
 summary = {}
-max_distance = 30
+rope_length = 30
 
 def alarm(msg):
     requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
@@ -110,7 +110,7 @@ summary['distance'] = points[-1].distance_to(midpoint)
 summary['ts'] = points[-1].ts
 summary['lastpos'] = (points[-1].lat, points[-1].long)
 
-if (summary['distance'] > max_distance):
+if (summary['distance'] > rope_length):
     alarm("distance to expected anchoring point is %.1f" % summary['distance'])
     alarm(funnurl)
 
