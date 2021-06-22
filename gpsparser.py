@@ -17,7 +17,7 @@ from secret import push_token
 
 points = []
 summary = {}
-rope_length = 36
+rope_length = 35
 
 def alarm(msg):
     requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
@@ -107,10 +107,16 @@ summary['finnurl'] = finnurl
 
 #print("\n".join(["{lat},{long}".format(**point) for point in points]))
 
+max_lat = max([point.lat for point in points])
+min_lat = min([point.lat for point in points])
+max_long = max([point.long for point in points])
+min_long = min([point.long for point in points])
+
 summary['distance'] = points[-1].distance_to(midpoint)
 summary['ts'] = points[-1].ts
 summary['lastpos'] = (points[-1].lat, points[-1].long)
 summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
+summary['box'] = [[min_lat, min_long], [max_lat,max_long]]
 
 if (summary['distance'] > rope_length):
     alarm("distance to expected anchoring point is %.1f" % summary['distance'])
@@ -123,4 +129,4 @@ with open('anchoring-jtt.json', 'w') as f:
     json.dump(parser.jtt(data), f)
 
 with open('anchoring-summary.json', 'w') as f:
-    json.dump(summary, f)
+    json.dump(summary, f, indent=4)
