@@ -13,6 +13,7 @@ from secret import push_token
 
 points = []
 summary = {}
+max_distance = 30
 
 def alarm(msg):
     requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
