@@ -17,7 +17,7 @@ from secret import push_token
 
 points = []
 summary = {}
-rope_length = 30
+rope_length = 36
 
 def alarm(msg):
     requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
@@ -113,7 +113,7 @@ summary['lastpos'] = (points[-1].lat, points[-1].long)
 
 if (summary['distance'] > rope_length):
     alarm("distance to expected anchoring point is %.1f" % summary['distance'])
-    alarm(funnurl)
+    alarm(finnurl)
 
 with open('anchoring-geojson.json', 'w') as f:
     json.dump(parser.geojson(data), f)
