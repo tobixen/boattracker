@@ -10,6 +10,7 @@ import parser
 import json
 
 points = []
+summary = {}
 
 
 class Point:
@@ -28,7 +29,7 @@ class Point:
     @property
     def string(self): return f"{self.long:.5f},{self.lat:.5f},{self.colour},{self.ts[11:13]}"
 
-with open('/tmp/gps-tracker2') as foofile:
+with open('gpstracker.raw') as foofile:
     content=foofile.read()
 data = parser.parse_blobs(content)
 points = [Point(*x) for x in data]
@@ -90,15 +91,19 @@ print(f"DEBUG: max distance: {max_distance:.1f}")
 
 finnurl="https://kart.finn.no/?lng=10.48015&lat=59.83833&zoom=18&mapType=norortho&markers="
 finnurl+='%7C'.join([x.string for x in finnpoints])
-print(finnurl)
+summary['finnurl'] = finnurl
 
 #print("\n".join(["{lat},{long}".format(**point) for point in points]))
 
-print(points[-1].ts)
-print(points[-1].distance_to(midpoint))
+summary['ts'] = points[-1].ts
+summary['distance'] = points[-1].distance_to(midpoint)
+summary['lastpos'] = (points[-1].lat, points[-1].long)
 
 with open('anchoring-geojson.json', 'w') as f:
     json.dump(parser.geojson(data), f)
 
 with open('anchoring-jtt.json', 'w') as f:
     json.dump(parser.jtt(data), f)
+
+with open('anchoring-summary.json', 'w') as f:
+    json.dump(summary, f)

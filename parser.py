@@ -41,12 +41,13 @@ def geojson(points):
     module.  (There also exists a geojson module, should eventually
     consider to use that)
     """
-    points = [[points[0], points[1]] for point in points]
+    mypoints = [[point[1], point[0]] for point in points]
     data={
         'type': 'Feature',
+        'properties': {},
         'geometry': {
             'type': 'LineString',
-            'coordinates': points
+            'coordinates': mypoints
         }
     }
     return data
@@ -67,3 +68,5 @@ def jtt(points, title="Anchor drift", desc="Tracking of the vessel S/Y Solveig L
             }}
         ]
     }
+    return data
+
