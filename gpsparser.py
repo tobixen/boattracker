@@ -2,15 +2,21 @@
 
 import sys
 
-sys.path.append('.')
-
 from geopy.distance import distance as geo_distance
 import itertools
-import parser
 import json
+
+sys.path.append('.')
+
+import parser
+from secret import push_token
 
 points = []
 summary = {}
+
+def alarm(msg):
+    requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
+    logging.critical("alarm - pushing to cellphone: %s\n" % msg)
 
 
 class Point:
@@ -95,9 +101,13 @@ summary['finnurl'] = finnurl
 
 #print("\n".join(["{lat},{long}".format(**point) for point in points]))
 
-summary['ts'] = points[-1].ts
 summary['distance'] = points[-1].distance_to(midpoint)
+summary['ts'] = points[-1].ts
 summary['lastpos'] = (points[-1].lat, points[-1].long)
+
+if (summary['distance'] > max_distance):
+    alarm("distance to expected anchoring point is %.1f" % summary['distance'])
+    alarm(funnurl)
 
 with open('anchoring-geojson.json', 'w') as f:
     json.dump(parser.geojson(data), f)
