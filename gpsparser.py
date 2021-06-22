@@ -8,6 +8,7 @@ from geopy.distance import distance as geo_distance
 import itertools
 import json
 import logging
+import requests
 
 sys.path.append('.')
 
