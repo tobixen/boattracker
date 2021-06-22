@@ -3,6 +3,8 @@ import logging
 def parse_blobs(content):
     points = []
     for blob in content.split(')('):
+        if blob.startswith('028042516052BP05355228042516052'):
+            blob = blob.replace('028042516052BP05355228042516052', '028042516052BR00')
         if blob.startswith('('):
             blob=blob[1:]
         if blob.endswith(')'):
@@ -11,7 +13,8 @@ def parse_blobs(content):
             continue
         if blob.startswith('028042516052BP'):
             logging.warning("skipping blob: %s" % blob)
-        elif blob.startswith('028042516052BR00'):
+            continue
+        if blob.startswith('028042516052BR00'):
             blob = blob[16:]
             ts = f"20{blob[0:2]}-{blob[2:4]}-{blob[4:6]}T{blob[33:39]}"
             if ts<'2021-06-19':
