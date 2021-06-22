@@ -7,6 +7,7 @@ __version__ = '0.0.1'
 from geopy.distance import distance as geo_distance
 import itertools
 import json
+import logging
 
 sys.path.append('.')
 
