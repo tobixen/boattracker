@@ -110,6 +110,7 @@ summary['finnurl'] = finnurl
 summary['distance'] = points[-1].distance_to(midpoint)
 summary['ts'] = points[-1].ts
 summary['lastpos'] = (points[-1].lat, points[-1].long)
+summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
 
 if (summary['distance'] > rope_length):
     alarm("distance to expected anchoring point is %.1f" % summary['distance'])
