@@ -95,7 +95,7 @@ def find_distance(pos1, pos2):
 def main():
     points = []
     summary = {}
-    swing_radius = 35.62
+    swing_radius = 36.62
 
     with open('gpstracker.raw', 'rb') as foofile:
         content=foofile.read()
