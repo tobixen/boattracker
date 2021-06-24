@@ -16,10 +16,6 @@ sys.path.append('.')
 import parser
 from secret import push_token
 
-points = []
-summary = {}
-swing_radius = 35.62
-
 def alarm(msg):
     requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
     logging.critical("alarm - pushing to cellphone: %s\n" % msg)
@@ -35,6 +31,10 @@ class Point:
     def distance_to(self, other):
         return geo_distance(self.tuple, other.tuple).meters
 
+    def time_delta(self, other):
+        tsobjs = [datetime.datetime.strptime(ts, "%Y-%m-%dT%H%M%S") for ts in [self.ts, other.ts]]
+        return tsobjs[0]-tsobjs[1]
+
     @property
     def tuple(self): return self.lat, self.long
 
@@ -46,17 +46,18 @@ def redux(points, min_dist, min_time, max_points):
     points_redux = []
     lastpoint = None
     for point in points:
-        if lastpoint and lastpoint.distance_to(point)<min_dist:
+        if lastpoint and -lastpoint.time_delta(point)<min_time:
             continue
-
-        if lastpoint and lastpoint.time_delta(point)<min_time:
+        
+        if lastpoint and lastpoint.distance_to(point)<min_dist:
             continue
 
         lastpoint=point
         points_redux.append(point)
+
     if len(points_redux)>max_points:
         overshoot_factor = len(points_redux)/max_points
-        print("DEBUG: overshoot factor: %.2f.  min distance: %.2f.  min time secs: %.2f. points: %i" % (overshoot_factor, min_dist, len(points_redux)))
+        print("DEBUG: overshoot factor: %.2f.  min distance: %.2f.  min time: %s. points: %i" % (overshoot_factor, min_dist, min_time, len(points_redux)))
         return redux(points, min_dist*overshoot_factor**0.8, min_time*overshoot_factor**0.8, max_points)
     else:
         print("DEBUG: distance steps in meters: %.2f" % min_dist)
@@ -68,6 +69,10 @@ def find_distance(pos1, pos2):
     return geo_distance(pos1.tuple,pos2.tuple).meters
 
 def main():
+    points = []
+    summary = {}
+    swing_radius = 35.62
+
     with open('gpstracker.raw', 'rb') as foofile:
         content=foofile.read()
     data = parser.parse_blobs(content)
@@ -75,10 +80,10 @@ def main():
 
 
     logging.debug(__version__)
-    finnpoints=redux(points, 3.0, 186)
+    finnpoints=redux(points, 3.0, datetime.timedelta(seconds=15), 186)
 
 
-    outliers=redux(finnpoints, 10, 70)
+    outliers=redux(finnpoints, 10, datetime.timedelta(seconds=60), 70)
     max_distance=0
     for twopoints in itertools.combinations(outliers, 2):
         distance = twopoints[0].distance_to(twopoints[1])
