@@ -92,16 +92,18 @@ def redux(points, min_dist, min_time, max_points):
 def find_distance(pos1, pos2):
     return geo_distance(pos1.tuple,pos2.tuple).meters
 
-def main():
-    points = []
-    summary = {}
-    swing_radius = 36.62
-
+def read_file():
     with open('gpstracker.raw', 'rb') as foofile:
         content=foofile.read()
     data = parser.parse_blobs(content)
     points = [Point(*x) for x in data]
+    return points
 
+def main():
+    summary = {}
+    swing_radius = 36.62
+
+    points = read_file()
 
     logging.debug(__version__)
     finnpoints=redux(points, 3.0, datetime.timedelta(seconds=15), 186)
@@ -161,6 +163,8 @@ def main():
         swing_radius = (swing_radius+summary['distance'])/2.0
     else:
         swing_radius *= 0.99999
+
+    data = [[p.lat, p.long, p.ts] for p in points]
 
     with open('anchoring-geojson.json', 'w') as f:
         json.dump(parser.geojson(data), f)
