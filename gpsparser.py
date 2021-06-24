@@ -2,7 +2,7 @@
 
 import sys
 
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 from geopy.distance import distance as geo_distance
 import itertools
@@ -17,7 +17,7 @@ from secret import push_token
 
 points = []
 summary = {}
-rope_length = 35
+swing_radius = 35.32
 
 def alarm(msg):
     requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
@@ -39,11 +39,6 @@ class Point:
 
     @property
     def string(self): return f"{self.long:.5f},{self.lat:.5f},{self.colour},{self.ts[11:13]}"
-
-with open('gpstracker.raw', 'rb') as foofile:
-    content=foofile.read()
-data = parser.parse_blobs(content)
-points = [Point(*x) for x in data]
 
 def redux(points, min_dist, max_points):
     max_distance=90
@@ -71,66 +66,80 @@ def redux(points, min_dist, max_points):
 def find_distance(pos1, pos2):
     return geo_distance(pos1.tuple,pos2.tuple).meters
 
-logging.debug(__version__)
-finnpoints=redux(points, 3.0, 186)
+def main():
+    with open('gpstracker.raw', 'rb') as foofile:
+        content=foofile.read()
+    data = parser.parse_blobs(content)
+    points = [Point(*x) for x in data]
 
 
-outliers=redux(finnpoints, 13, 40)
-max_distance=0
-for twopoints in itertools.combinations(outliers, 2):
-    distance = twopoints[0].distance_to(twopoints[1])
-    if distance > max_distance:
-        outliers2 = twopoints
-        max_distance = distance
-        
-outliers2[0].colour = 'g'
-outliers2[1].colour = 'g'
+    logging.debug(__version__)
+    finnpoints=redux(points, 3.0, 186)
 
-midpoint = Point(0,0,colour='g', ts='1970-01-01Txxxxxx')
 
-midpoint.lat = sum([p.lat for p in outliers2])
-midpoint.lat /= len(twopoints)
-midpoint.long = sum([p.long for p in outliers2])
-midpoint.long /= len(twopoints)
+    outliers=redux(finnpoints, 13, 40)
+    max_distance=0
+    for twopoints in itertools.combinations(outliers, 2):
+        distance = twopoints[0].distance_to(twopoints[1])
+        if distance > max_distance:
+            outliers2 = twopoints
+            max_distance = distance
 
-#import pdb; pdb.set_trace()
+    outliers2[0].colour = 'g'
+    outliers2[1].colour = 'g'
 
-finnpoints.append(midpoint)
+    midpoint = Point(0,0,colour='g', ts='1970-01-01Txxxxxx')
 
-points[-1].colour = 'b'
+    midpoint.lat = sum([p.lat for p in outliers2])
+    midpoint.lat /= len(twopoints)
+    midpoint.long = sum([p.long for p in outliers2])
+    midpoint.long /= len(twopoints)
 
-finnpoints.append(points[-1])
+    #import pdb; pdb.set_trace()
 
-print(f"DEBUG: max distance: {max_distance:.1f}")
+    finnpoints.append(midpoint)
 
-#finnpoints = [x for x in finnpoints if x['color'] != 'r']
+    points[-1].colour = 'b'
 
-finnurl="https://kart.finn.no/?lng=10.48015&lat=59.83833&zoom=18&mapType=norortho&markers="
-finnurl+='%7C'.join([x.string for x in finnpoints])
-summary['finnurl'] = finnurl
+    finnpoints.append(points[-1])
 
-#print("\n".join(["{lat},{long}".format(**point) for point in points]))
+    print(f"DEBUG: max distance: {max_distance:.1f}")
 
-max_lat = max([point.lat for point in points])
-min_lat = min([point.lat for point in points])
-max_long = max([point.long for point in points])
-min_long = min([point.long for point in points])
+    #finnpoints = [x for x in finnpoints if x['color'] != 'r']
 
-summary['distance'] = points[-1].distance_to(midpoint)
-summary['ts'] = points[-1].ts
-summary['lastpos'] = (points[-1].lat, points[-1].long)
-summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
-summary['box'] = [[min_lat, min_long], [max_lat,max_long]]
+    finnurl="https://kart.finn.no/?lng=10.48015&lat=59.83833&zoom=18&mapType=norortho&markers="
+    finnurl+='%7C'.join([x.string for x in finnpoints])
+    summary['finnurl'] = finnurl
 
-if (summary['distance'] > rope_length):
-    alarm("distance to expected anchoring point is %.1f" % summary['distance'])
-    alarm(finnurl)
+    #print("\n".join(["{lat},{long}".format(**point) for point in points]))
 
-with open('anchoring-geojson.json', 'w') as f:
-    json.dump(parser.geojson(data), f)
+    max_lat = max([point.lat for point in points])
+    min_lat = min([point.lat for point in points])
+    max_long = max([point.long for point in points])
+    min_long = min([point.long for point in points])
 
-with open('anchoring-jtt.json', 'w') as f:
-    json.dump(parser.jtt(data), f)
+    summary['distance'] = points[-1].distance_to(midpoint)
+    summary['ts'] = points[-1].ts
+    summary['lastpos'] = (points[-1].lat, points[-1].long)
+    summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
+    summary['box'] = [[min_lat, min_long], [max_lat,max_long]]
 
-with open('anchoring-summary.json', 'w') as f:
-    json.dump(summary, f, indent=4)
+    if (summary['distance'] > swing_radius):
+        alarm("distance to expected anchoring point is %.1f" % summary['distance'])
+        alarm(finnurl)
+
+    with open('anchoring-geojson.json', 'w') as f:
+        json.dump(parser.geojson(data), f)
+
+    with open('anchoring-jtt.json', 'w') as f:
+        json.dump(parser.jtt(data), f)
+
+    with open('anchoring-summary.json', 'w') as f:
+        json.dump(summary, f, indent=4)
+
+if __name__ == '__main__':
+    try:
+        main()
+    except:
+        alarm("exception in gps parsing script")
+        logging.error("exception found", exc_info=True)
