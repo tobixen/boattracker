@@ -17,7 +17,7 @@ from secret import push_token
 
 points = []
 summary = {}
-swing_radius = 35.32
+swing_radius = 35.62
 
 def alarm(msg):
     requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
@@ -77,7 +77,7 @@ def main():
     finnpoints=redux(points, 3.0, 186)
 
 
-    outliers=redux(finnpoints, 13, 40)
+    outliers=redux(finnpoints, 10, 70)
     max_distance=0
     for twopoints in itertools.combinations(outliers, 2):
         distance = twopoints[0].distance_to(twopoints[1])
