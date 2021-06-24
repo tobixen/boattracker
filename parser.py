@@ -2,7 +2,12 @@ import logging
 
 def parse_blobs(content):
     points = []
-    for blob in content.split(')('):
+    for blob in content.split(b')('):
+        try:
+            blob = blob.decode('ascii')
+        except:
+            logging.error("non-ascii blob: %s" % str(blob))
+            continue
         if blob.startswith('028042516052BP05355228042516052'):
             blob = blob.replace('028042516052BP05355228042516052', '028042516052BR00')
         if blob.startswith('('):
@@ -19,16 +24,20 @@ def parse_blobs(content):
             ts = f"20{blob[0:2]}-{blob[2:4]}-{blob[4:6]}T{blob[33:39]}"
             if ts<'2021-06-19':
                 continue
-            lat = int(blob[7:9])+float(blob[9:16])/60
-            if blob[16] == 'S':
+            try:
+                lat = int(blob[7:9])+float(blob[9:16])/60
+            except:
+                logging.error("problem with blob: " + blob)
+                continue
+            if blob[16:17] == 'S':
                 lat = -lat
             else:
-                assert blob[16] == 'N'
+                assert blob[16:17] == 'N'
             long = int(blob[17:20])+float(blob[20:27])/60
             if blob[27] == 'W':
                 long = -long
             else:
-                assert(blob[27] == 'E')
+                assert(blob[27:28] == 'E')
             if blob[28:32] != '000.':
                 logging.error("unexpected data on position 28-33: %s (is this speed?  altitude?)" % (blob[28:33]))
             if blob[39:] != '000.0001000000L00000000':

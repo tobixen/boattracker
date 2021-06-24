@@ -40,17 +40,21 @@ class Point:
     @property
     def string(self): return f"{self.long:.5f},{self.lat:.5f},{self.colour},{self.ts[11:13]}"
 
-with open('gpstracker.raw') as foofile:
+with open('gpstracker.raw', 'rb') as foofile:
     content=foofile.read()
 data = parser.parse_blobs(content)
 points = [Point(*x) for x in data]
 
 def redux(points, min_dist, max_points):
+    max_distance=90
     points_redux = []
     lastpoint = None
     for point in points:
         if lastpoint and lastpoint.distance_to(point)<min_dist:
             continue
+        elif lastpoint and lastpoint.distance_to(point)>max_distance:
+            logging.error("max distance exceeded")
+            import pdb; pdb.set_trace()
         else:
             lastpoint=point
             points_redux.append(point)
