@@ -10,6 +10,7 @@ import json
 import logging
 import requests
 import datetime
+import math
 
 sys.path.append('.')
 
@@ -34,6 +35,29 @@ class Point:
     def time_delta(self, other):
         tsobjs = [datetime.datetime.strptime(ts, "%Y-%m-%dT%H%M%S") for ts in [self.ts, other.ts]]
         return tsobjs[0]-tsobjs[1]
+
+    def bearing(self, other):
+        """
+        Calculates the bearing between two points, copied from https://gist.github.com/jeromer/2005586 
+        """
+        lat1 = math.radians(self.lat)
+        lat2 = math.radians(other.lat)
+
+        diffLong = math.radians(other.long - self.long)
+
+        x = math.sin(diffLong) * math.cos(lat2)
+        y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1)
+                * math.cos(lat2) * math.cos(diffLong))
+
+        initial_bearing = math.atan2(x, y)
+
+        # Now we have the initial bearing but math.atan2 return values
+        # from -180° to + 180° which is not what we want for a compass bearing
+        # The solution is to normalize the initial bearing as shown below
+        initial_bearing = math.degrees(initial_bearing)
+        compass_bearing = (initial_bearing + 360) % 360
+
+        return compass_bearing
 
     @property
     def tuple(self): return self.lat, self.long
@@ -129,6 +153,7 @@ def main():
     summary['lastpos'] = (points[-1].lat, points[-1].long)
     summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
     summary['box'] = [[min_lat, min_long], [max_lat,max_long]]
+    summary['bearing'] = midpoint.bearing(points[-1])
 
     if (summary['distance'] > swing_radius):
         alarm("distance to expected anchoring point is %.1f" % summary['distance'])
