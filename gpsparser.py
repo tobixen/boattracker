@@ -9,6 +9,7 @@ import itertools
 import json
 import logging
 import requests
+import datetime
 
 sys.path.append('.')
 
@@ -40,23 +41,23 @@ class Point:
     @property
     def string(self): return f"{self.long:.5f},{self.lat:.5f},{self.colour},{self.ts[11:13]}"
 
-def redux(points, min_dist, max_points):
+def redux(points, min_dist, min_time, max_points):
     max_distance=90
     points_redux = []
     lastpoint = None
     for point in points:
         if lastpoint and lastpoint.distance_to(point)<min_dist:
             continue
-        elif lastpoint and lastpoint.distance_to(point)>max_distance:
-            logging.error("max distance exceeded")
-            import pdb; pdb.set_trace()
-        else:
-            lastpoint=point
-            points_redux.append(point)
+
+        if lastpoint and lastpoint.time_delta(point)<min_time:
+            continue
+
+        lastpoint=point
+        points_redux.append(point)
     if len(points_redux)>max_points:
         overshoot_factor = len(points_redux)/max_points
-        print("DEBUG: overshoot factor: %.2f.  distance: %.2f. points: %i" % (overshoot_factor, min_dist, len(points_redux)))
-        return redux(points, min_dist*overshoot_factor**0.8, max_points)
+        print("DEBUG: overshoot factor: %.2f.  min distance: %.2f.  min time secs: %.2f. points: %i" % (overshoot_factor, min_dist, len(points_redux)))
+        return redux(points, min_dist*overshoot_factor**0.8, min_time*overshoot_factor**0.8, max_points)
     else:
         print("DEBUG: distance steps in meters: %.2f" % min_dist)
         print("DEBUG: num points: %i" % len(points_redux))
@@ -127,6 +128,9 @@ def main():
     if (summary['distance'] > swing_radius):
         alarm("distance to expected anchoring point is %.1f" % summary['distance'])
         alarm(finnurl)
+        swing_radius = (swing_radius+summary['distance'])/2.0
+    else:
+        swing_radius *= 0.99999
 
     with open('anchoring-geojson.json', 'w') as f:
         json.dump(parser.geojson(data), f)
