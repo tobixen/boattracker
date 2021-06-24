@@ -106,10 +106,10 @@ def main():
     points = read_file()
 
     logging.debug(__version__)
-    finnpoints=redux(points, 3.0, datetime.timedelta(seconds=15), 186)
-
-
-    outliers=redux(finnpoints, 10, datetime.timedelta(seconds=60), 70)
+    
+    somepoints=redux(points, 2.5, datetime.timedelta(seconds=15), 1024)
+    finnpoints=redux(points, 3.0, datetime.timedelta(seconds=15), 187)
+    outliers=redux(points, 10, datetime.timedelta(seconds=60), 60)
     max_distance=0
     for twopoints in itertools.combinations(outliers, 2):
         distance = twopoints[0].distance_to(twopoints[1])
@@ -165,13 +165,20 @@ def main():
         swing_radius *= 0.99999
 
     data = [[p.lat, p.long, p.ts] for p in points]
+    redux_data = [[p.lat, p.long, p.ts] for p in somepoints]
 
     with open('anchoring-geojson.json', 'w') as f:
         json.dump(parser.geojson(data), f)
 
+    with open('anchoring-geojson-redux.json', 'w') as f:
+        json.dump(parser.geojson(redux_data), f)
+        
     with open('anchoring-jtt.json', 'w') as f:
         json.dump(parser.jtt(data), f)
 
+    with open('anchoring-jtt-redux.json', 'w') as f:
+        json.dump(parser.jtt(redux_data), f)
+        
     with open('anchoring-summary.json', 'w') as f:
         json.dump(summary, f, indent=4)
 
