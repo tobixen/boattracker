@@ -40,8 +40,8 @@ def parse_blobs(content):
                 assert(blob[27:28] == 'E')
             if blob[28:32] != '000.':
                 logging.error("unexpected data on position 28-33: %s (is this speed?  altitude?)" % (blob[28:33]))
-            if blob[39:] != '000.0001000000L00000000':
-                logging.error("point [%.5f, %.5f, %s] - unexpected data on position 39-: %s (is this speed?  altitude?)" % (lat, long, ts, blob[39:]))
+            if blob[39:] not in ('000.0001000000L00000000', '289.1801000000L00000000'):
+                logging.error("point [%.5f, %.5f, %s] - unexpected data on position 39-: %s (first xxx.xx digits may be the gps heading?)" % (lat, long, ts, blob[39:]))
             points.append([lat, long, ts])
         else:
             logging.error("unexpected blob: " + blob)
