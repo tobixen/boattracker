@@ -96,6 +96,9 @@ def read_file():
     with open('gpstracker.raw', 'rb') as foofile:
         content=foofile.read()
     data = parser.parse_blobs(content)
+    assert(data is not None)
+    for x in data:
+        assert(x is not None)
     points = [Point(*x) for x in data]
     return points
 
