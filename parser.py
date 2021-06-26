@@ -4,6 +4,13 @@ def parse_blobs(content):
     points = []
     for blob in content.split(b')('):
         try:
+            point = parse_blob(blob)
+            points.append(point)
+        except:
+            logging.error("exception found while parsing blob", exc_info=True)
+
+def parse_blob(blob):
+        try:
             blob = blob.decode('ascii')
         except:
             logging.error("non-ascii blob: %s" % str(blob))
@@ -38,11 +45,11 @@ def parse_blobs(content):
                 long = -long
             else:
                 assert(blob[27:28] == 'E')
-            if blob[28:32] != '000.':
-                logging.error("unexpected data on position 28-33: %s (is this speed?  altitude?)" % (blob[28:33]))
-            if blob[39:] not in ('000.0001000000L00000000', '289.1801000000L00000000'):
-                logging.error("point [%.5f, %.5f, %s] - unexpected data on position 39-: %s (first xxx.xx digits may be the gps heading?)" % (lat, long, ts, blob[39:]))
-            points.append([lat, long, ts])
+            speed = float(blob[28:32])
+            heading = float(blob[39:44])
+            if blob[44:] != '01000000L00000000':
+                logging.error("point [%.5f, %.5f, %s] - unexpected data on position 44-: %s (we're still missing altitude?)" % (lat, long, ts, blob[44:]))
+            return [lat, long, ts, speed, heading]
         else:
             logging.error("unexpected blob: " + blob)
     return points
@@ -75,7 +82,7 @@ def jtt(points, title="Anchor drift", desc="Tracking of the vessel S/Y Solveig L
                 "desc": desc,
                 "segments": [
                     {"data-fields": ["latitude", "longitude", "timestamp"]},
-                    points
+                    [[x[0], x[1], x[2]] for x in points]
                 ]
             }}
         ]
