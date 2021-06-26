@@ -101,7 +101,7 @@ def read_file():
 
 def main():
     summary = {}
-    swing_radius = 40.50
+    swing_radius = 0.50
 
     points = read_file()
 
