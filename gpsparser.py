@@ -168,19 +168,19 @@ def main():
         swing_radius *= 0.99999
 
     data = [[p.lat, p.long, p.ts] for p in points]
-    redux_data = [[p.lat, p.long, p.ts] for p in somepoints]
+    #redux_data = [[p.lat, p.long, p.ts] for p in somepoints]
 
     with open('anchoring-geojson.json', 'w') as f:
         json.dump(parser.geojson(data), f)
 
-    with open('anchoring-geojson-redux.json', 'w') as f:
-        json.dump(parser.geojson(redux_data), f)
+    #with open('anchoring-geojson-redux.json', 'w') as f:
+    #    json.dump(parser.geojson(redux_data), f)
         
     with open('anchoring-jtt.json', 'w') as f:
         json.dump(parser.jtt(data), f)
 
-    with open('anchoring-jtt-redux.json', 'w') as f:
-        json.dump(parser.jtt(redux_data), f)
+    #with open('anchoring-jtt-redux.json', 'w') as f:
+    #    json.dump(parser.jtt(redux_data), f)
         
     with open('anchoring-summary.json', 'w') as f:
         json.dump(summary, f, indent=4)
