@@ -132,19 +132,19 @@ def main():
 
     #import pdb; pdb.set_trace()
 
-    finnpoints.append(midpoint)
+    #finnpoints.append(midpoint)
 
     points[-1].colour = 'b'
 
-    finnpoints.append(points[-1])
+    #finnpoints.append(points[-1])
 
     print(f"DEBUG: max distance: {max_distance:.1f}")
 
     #finnpoints = [x for x in finnpoints if x['color'] != 'r']
 
-    finnurl="https://kart.finn.no/?lng=10.48015&lat=59.83833&zoom=18&mapType=norortho&markers="
-    finnurl+='%7C'.join([x.string for x in finnpoints])
-    summary['finnurl'] = finnurl
+    #finnurl="https://kart.finn.no/?lng=10.48015&lat=59.83833&zoom=18&mapType=norortho&markers="
+    #finnurl+='%7C'.join([x.string for x in finnpoints])
+    #summary['finnurl'] = finnurl
 
     #print("\n".join(["{lat},{long}".format(**point) for point in points]))
 
