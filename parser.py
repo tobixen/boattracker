@@ -12,6 +12,7 @@ def parse_blobs(content):
                 points.append(point)
         except:
             logging.error("exception found while parsing blob", exc_info=True)
+    return points
 
 def parse_blob(blob):
     try:
