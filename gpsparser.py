@@ -99,7 +99,7 @@ def read_file():
     assert(data is not None)
     for x in data:
         assert(x is not None)
-    points = [Point(*x) for x in data]
+    points = [Point(lat=x[0], long=x[1], ts=x[2]) for x in data]
     return points
 
 def main():
