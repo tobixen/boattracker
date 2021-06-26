@@ -107,9 +107,9 @@ def main():
 
     logging.debug(__version__)
     
-    somepoints=redux(points, 2.5, datetime.timedelta(seconds=15), 1024)
-    finnpoints=redux(points, 3.0, datetime.timedelta(seconds=15), 187)
-    outliers=redux(points, 10, datetime.timedelta(seconds=60), 60)
+    somepoints=redux(points, 0.01, datetime.timedelta(seconds=15), 1024)
+    finnpoints=redux(points, 0.01, datetime.timedelta(seconds=15), 187)
+    outliers=redux(points, 0.01, datetime.timedelta(seconds=60), 60)
     max_distance=0
     for twopoints in itertools.combinations(outliers, 2):
         distance = twopoints[0].distance_to(twopoints[1])
