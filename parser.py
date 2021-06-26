@@ -31,8 +31,6 @@ def parse_blob(blob):
     if blob.startswith('028042516052BR00'):
         blob = blob[16:]
         ts = f"20{blob[0:2]}-{blob[2:4]}-{blob[4:6]}T{blob[33:39]}"
-        if ts<'2021-06-19':
-            continue
         try:
             lat = int(blob[7:9])+float(blob[9:16])/60
         except:
