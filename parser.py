@@ -1,11 +1,15 @@
 import logging
 
+class BlobError(Exception):
+    pass
+
 def parse_blobs(content):
     points = []
     for blob in content.split(b')('):
         try:
             point = parse_blob(blob)
-            points.append(point)
+            if point:
+                points.append(point)
         except:
             logging.error("exception found while parsing blob", exc_info=True)
 
@@ -13,8 +17,7 @@ def parse_blob(blob):
     try:
         blob = blob.decode('ascii')
     except:
-        logging.error("non-ascii blob: %s" % str(blob))
-        continue
+        raise BlobError("non-ascii blob: %s" % str(blob))
     if blob.startswith('028042516052BP05355228042516052'):
         blob = blob.replace('028042516052BP05355228042516052', '028042516052BR00')
     if blob.startswith('('):
@@ -22,10 +25,9 @@ def parse_blob(blob):
     if blob.endswith(')'):
         blob=blob[:1]
     if blob == '028042516052BP00355228042516052HSO199':
-        continue
+        return None
     if blob.startswith('028042516052BP'):
-        logging.warning("skipping blob: %s" % blob)
-        continue
+        raise BlobError("skipping blob: %s" % blob)
     if blob.startswith('028042516052BR00'):
         blob = blob[16:]
         ts = f"20{blob[0:2]}-{blob[2:4]}-{blob[4:6]}T{blob[33:39]}"
@@ -34,8 +36,7 @@ def parse_blob(blob):
         try:
             lat = int(blob[7:9])+float(blob[9:16])/60
         except:
-            logging.error("problem with blob: " + blob)
-            continue
+            raise BlobError("problem with blob: " + blob)
         if blob[16:17] == 'S':
             lat = -lat
         else:
@@ -51,8 +52,7 @@ def parse_blob(blob):
             logging.error("point [%.5f, %.5f, %s] - unexpected data on position 44-: %s (we're still missing altitude?)" % (lat, long, ts, blob[44:]))
         return [lat, long, ts, speed, heading]
     else:
-        logging.error("unexpected blob: " + blob)
-    return points
+        raise BlobError("unexpected blob: " + blob)
 
 def geojson(points):
     """Takes a simple points list and returns a data set that will
