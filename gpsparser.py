@@ -1,10 +1,11 @@
 #!/usr/bin/python
 
-import sys
 
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 from geopy.distance import distance as geo_distance
+import sys
+import asyncio
 import itertools
 import json
 import logging
@@ -20,7 +21,6 @@ from secret import push_token
 def alarm(msg):
     requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
     logging.critical("alarm - pushing to cellphone: %s\n" % msg)
-
 
 class Point:
     def __init__(self, lat, long, ts="", colour="r") -> None:
@@ -65,6 +65,47 @@ class Point:
     @property
     def string(self): return f"{self.long:.5f},{self.lat:.5f},{self.colour},{self.ts[11:13]}"
 
+class BoatPosData():
+    def __init__(self):
+        self.points = []
+        self.heading = None
+        self.speed = 0
+        self.swing_radius = 0
+        self.summary = {}
+        
+    def big_calc(self):
+        self.outliers = redux(self.points, 0.01, datetime.timedelta(seconds=60), 60)
+        max_distance = 0
+        for twopoints in itertools.combinations(self.outliers, 2):
+            distance = twopoints[0].distance_to(twopoints[1])
+            if distance > max_distance:
+                outliers2 = twopoints
+                max_distance = distance
+        self.outliers2 = outliers2
+        self.max_distance = max_distance
+        midpoint = Point(0,0,colour='g', ts='1970-01-01Txxxxxx')
+
+        midpoint.lat = sum([p.lat for p in self.outliers2])
+        midpoint.lat /= len(self.outliers2)
+        midpoint.long = sum([p.long for p in self.outliers2])
+        midpoint.long /= len(self.outliers2)
+        self.midpoint = midpoint
+        self.points[-1].colour = 'b'
+        
+        max_lat = max([point.lat for point in self.points])
+        min_lat = min([point.lat for point in self.points])
+        max_long = max([point.long for point in self.points])
+        min_long = min([point.long for point in self.points])
+
+        self.summary['distance'] = self.points[-1].distance_to(midpoint)
+        self.summary['ts'] = self.points[-1].ts
+        self.summary['lastpos'] = (self.points[-1].lat, self.points[-1].long)
+        self.summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
+        self.summary['box'] = [[min_lat, min_long], [max_lat,max_long]]
+        self.summary['anchor_bearing'] = midpoint.bearing(self.points[-1])
+        self.summary['heading'] = self.heading
+        self.summary['speed'] = self.speed
+
 def redux(points, min_dist, min_time, max_points):
     max_distance=90
     points_redux = []
@@ -102,43 +143,40 @@ def read_file():
     points = [Point(lat=x[0], long=x[1], ts=x[2]) for x in data]
     return points
 
+async def receive_blobs(reader, writer, mypos):
+    ## TODO: not in use yet
+    while True:
+        try:
+            blob = await asyncio.wait_for(reader.readuntil(b')'), timeout=60)
+        except:
+            logging.critical("exception found", exc_info=True)
+            writer.close()
+            break
+        with open('gpstracker.raw', 'ab') as rawfile:
+            rawfile.write(blob)
+            rawfile.write(b'\n')
+        point = parser.parse_blob(blob)
+        if point:
+            points.append(Point(lat=x[0], long=x[1], ts=x[2]))
+
 def main():
-    summary = {}
-    swing_radius = 3.01
+    mypos = BoatPosData()
 
-    points = read_file()
+    mypos.points = read_file()
+    mypos.big_calc()
 
-    logging.debug(__version__)
-    
-    #somepoints=redux(points, 0.01, datetime.timedelta(seconds=5), 1024)
-    #finnpoints=redux(points, 0.01, datetime.timedelta(seconds=5), 187)
-    outliers=redux(points, 0.01, datetime.timedelta(seconds=60), 60)
-    max_distance=0
-    for twopoints in itertools.combinations(outliers, 2):
-        distance = twopoints[0].distance_to(twopoints[1])
-        if distance > max_distance:
-            outliers2 = twopoints
-            max_distance = distance
-
-    outliers2[0].colour = 'g'
-    outliers2[1].colour = 'g'
-
-    midpoint = Point(0,0,colour='g', ts='1970-01-01Txxxxxx')
-
-    midpoint.lat = sum([p.lat for p in outliers2])
-    midpoint.lat /= len(twopoints)
-    midpoint.long = sum([p.long for p in outliers2])
-    midpoint.long /= len(twopoints)
+    mypos.outliers2[0].colour = 'g'
+    mypos.outliers2[1].colour = 'g'
 
     #import pdb; pdb.set_trace()
 
     #finnpoints.append(midpoint)
 
-    points[-1].colour = 'b'
+    mypos.points[-1].colour = 'b'
 
     #finnpoints.append(points[-1])
 
-    print(f"DEBUG: max distance: {max_distance:.1f}")
+    #print(f"DEBUG: max distance: {max_distance:.1f}")
 
     #finnpoints = [x for x in finnpoints if x['color'] != 'r']
 
@@ -148,26 +186,17 @@ def main():
 
     #print("\n".join(["{lat},{long}".format(**point) for point in points]))
 
-    max_lat = max([point.lat for point in points])
-    min_lat = min([point.lat for point in points])
-    max_long = max([point.long for point in points])
-    min_long = min([point.long for point in points])
+    with open('anchoring-summary.json', 'w') as f:
+        json.dump(mypos.summary, f, indent=4)
 
-    summary['distance'] = points[-1].distance_to(midpoint)
-    summary['ts'] = points[-1].ts
-    summary['lastpos'] = (points[-1].lat, points[-1].long)
-    summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
-    summary['box'] = [[min_lat, min_long], [max_lat,max_long]]
-    summary['bearing'] = midpoint.bearing(points[-1])
-
-    if (summary['distance'] > swing_radius):
-        alarm("distance to expected anchoring point is %.1f" % summary['distance'])
-        alarm(finnurl)
-        swing_radius = (swing_radius+summary['distance'])/2.0
+    if (mypos.summary['distance'] > mypos.swing_radius):
+        #alarm("distance to expected anchoring point is %.1f" % mypos.summary['distance'])
+        #alarm(finnurl)
+        swing_radius = (mypos.swing_radius+mypos.summary['distance'])/2.0
     else:
-        swing_radius *= 0.99999
+        mypos.swing_radius *= 0.99999
 
-    data = [[p.lat, p.long, p.ts] for p in points]
+    data = [[p.lat, p.long, p.ts] for p in mypos.points]
     #redux_data = [[p.lat, p.long, p.ts] for p in somepoints]
 
     with open('anchoring-geojson.json', 'w') as f:
@@ -182,9 +211,6 @@ def main():
     #with open('anchoring-jtt-redux.json', 'w') as f:
     #    json.dump(parser.jtt(redux_data), f)
         
-    with open('anchoring-summary.json', 'w') as f:
-        json.dump(summary, f, indent=4)
-
 if __name__ == '__main__':
     try:
         main()
