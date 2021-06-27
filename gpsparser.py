@@ -100,7 +100,7 @@ class BoatPosData():
         max_long = max([point.long for point in self.points])
         min_long = min([point.long for point in self.points])
 
-        self.summary['distance'] = self.points[-1].distance_to(midpoint)
+        self.summary['distance'] = self.points[-1].distance_to(self.midpoint)
         self.summary['ts'] = self.points[-1].ts
         self.summary['lastpos'] = (self.points[-1].lat, self.points[-1].long)
         self.summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
