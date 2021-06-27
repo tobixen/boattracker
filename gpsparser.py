@@ -103,7 +103,7 @@ class BoatPosData():
         self.summary['distance'] = self.points[-1].distance_to(self.midpoint)
         self.summary['ts'] = self.points[-1].ts
         self.summary['lastpos'] = (self.points[-1].lat, self.points[-1].long)
-        self.summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
+        self.summary['estimated_anchorpos'] = (self.midpoint.lat, self.midpoint.long)
         self.summary['box'] = [[min_lat, min_long], [max_lat,max_long]]
         self.summary['anchor_bearing'] = self.midpoint.bearing(self.points[-1])
         self.summary['heading'] = self.heading
