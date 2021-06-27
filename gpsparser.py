@@ -92,6 +92,9 @@ class BoatPosData():
         self.midpoint = midpoint
         self.points[-1].colour = 'b'
         
+        self.small_calc()
+
+    def small_calc(self):
         max_lat = max([point.lat for point in self.points])
         min_lat = min([point.lat for point in self.points])
         max_long = max([point.long for point in self.points])
@@ -102,7 +105,7 @@ class BoatPosData():
         self.summary['lastpos'] = (self.points[-1].lat, self.points[-1].long)
         self.summary['estimated_anchorpos'] = (midpoint.lat, midpoint.long)
         self.summary['box'] = [[min_lat, min_long], [max_lat,max_long]]
-        self.summary['anchor_bearing'] = midpoint.bearing(self.points[-1])
+        self.summary['anchor_bearing'] = self.midpoint.bearing(self.points[-1])
         self.summary['heading'] = self.heading
         self.summary['speed'] = self.speed
 
