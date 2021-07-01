@@ -48,7 +48,7 @@ def parse_blob(blob):
         speed = float(blob[28:32])
         heading = float(blob[39:45])
         if blob[45:] != '01000000L00000000':
-            logging.error("point [%.5f, %.5f, %s] - unexpected data on position 44-: %s (we're still missing altitude?)" % (lat, long, ts, blob[44:]))
+            logging.error("point [%.5f, %.5f, %s] - unexpected data on position 45-: %s (we're still missing altitude?)" % (lat, long, ts, blob[45:]))
         return [lat, long, ts, speed, heading]
     else:
         raise BlobError("unexpected blob: " + blob)
