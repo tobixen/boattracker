@@ -76,6 +76,7 @@ class BoatPosData():
     def big_calc(self):
         self.outliers = redux(self.points, 0.01, datetime.timedelta(seconds=60), 60)
         max_distance = 0
+        outliers2 = []
         for twopoints in itertools.combinations(self.outliers, 2):
             distance = twopoints[0].distance_to(twopoints[1])
             if distance > max_distance:
@@ -85,10 +86,13 @@ class BoatPosData():
         self.max_distance = max_distance
         midpoint = Point(0,0,colour='g', ts='1970-01-01Txxxxxx')
 
-        midpoint.lat = sum([p.lat for p in self.outliers2])
-        midpoint.lat /= len(self.outliers2)
-        midpoint.long = sum([p.long for p in self.outliers2])
-        midpoint.long /= len(self.outliers2)
+        if self.outliers2:
+            midpoint.lat = sum([p.lat for p in self.outliers2])
+            midpoint.lat /= len(self.outliers2)
+            midpoint.long = sum([p.long for p in self.outliers2])
+            midpoint.long /= len(self.outliers2)
+        else:
+            midpoint = self.points[-1]
         self.midpoint = midpoint
         self.points[-1].colour = 'b'
         
