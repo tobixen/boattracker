@@ -8,4 +8,4 @@ My intention is to refactor and document everything in such a way that it can be
 
 ## Web interface
 
-The web interface is developed by my son
+The web interface at https://solveig.oslo.no/BoatTracker/Boat%20Tracker.html was set up by my son

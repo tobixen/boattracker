@@ -12,22 +12,27 @@ import logging
 import requests
 import datetime
 import math
+import subprocess
+import socket
 
 sys.path.append('.')
 
 import parser
-from secret import push_token
+#from secret import push_token
 
-def alarm(msg):
-    requests.post("https://api.pushover.net/1/messages.json", json={"token":push_token,"user":"u8qz7uu2fc64gonrjsbbkts67omba2","message":msg})
-    logging.critical("alarm - pushing to cellphone: %s\n" % msg)
+def alarm(msg, level=2):
+    lvltxt={0: 'OK', 1: 'WARNING', 2: 'CRITICAL'}
+    subprocess.run(["/usr/bin/sudo", "/usr/local/sbin/send-mod-gearman", "/etc/mod-gearman/send-mod-gearman.conf"],
+                   input=f"{socket.gethostname()}\tSolveig may be drifting\t{level}\t{lvltxt[level]}: $msg".encode('utf-8'))
 
 class Point:
-    def __init__(self, lat, long, ts="", colour="r") -> None:
+    def __init__(self, lat, long, ts="", heading=None, speed=None, colour="r") -> None:
         self.lat = lat
         self.long = long
         self.colour = colour
         self.ts = ts
+        self.heading = heading
+        self.speed = speed
 
     def distance_to(self, other):
         return geo_distance(self.tuple, other.tuple).meters
@@ -74,7 +79,17 @@ class BoatPosData():
         self.summary = {}
         
     def big_calc(self):
-        self.outliers = redux(self.points, 0.01, datetime.timedelta(seconds=60), 60)
+        self.anchoring_time = "1970-01-01"
+        self.expected_swing_radius=50
+        try:
+            with open('/var/www/html/solveig.oslo.no/anchoring_time', 'r') as f:
+                self.anchoring_time = f.readline().strip()
+            with open('/var/www/html/solveig.oslo.no/anchoring_expected_swing_radius', 'r') as f:
+                self.expected_swing_radius = float(f.readline().strip())
+        except:
+            pass
+
+        self.outliers = redux([x for x in self.points if x.ts>self.anchoring_time], 0.1, datetime.timedelta(seconds=14), 60)
         max_distance = 0
         outliers2 = []
         for twopoints in itertools.combinations(self.outliers, 2):
@@ -91,6 +106,7 @@ class BoatPosData():
             midpoint.lat /= len(self.outliers2)
             midpoint.long = sum([p.long for p in self.outliers2])
             midpoint.long /= len(self.outliers2)
+
         else:
             midpoint = self.points[-1]
         self.midpoint = midpoint
@@ -112,28 +128,51 @@ class BoatPosData():
         self.summary['anchor_bearing'] = self.midpoint.bearing(self.points[-1])
         self.summary['heading'] = self.heading
         self.summary['speed'] = self.speed
+        self.summary['expected_swing_radius'] = self.expected_swing_radius
 
+        if self.outliers2:
+            self.swing_radius = self.midpoint.distance_to(self.outliers2[0])
+            if (self.expected_swing_radius < self.swing_radius):
+                alarm(f"Observed swing radius is {self.swing_radius:.1f}, which is higher than expected {self.expected_swing_radius:.1f}", 2)
+            elif (self.expected_swing_radius < self.swing_radius*0.9):
+                alarm(f"Observed swing radius is {self.swing_radius:.1f}, which is near the expected {self.expected_swing_radius:.1f}", 1)
+            elif (self.summary['distance'] > self.swing_radius*0.99):
+                alarm(f"Distance to anchor is probably {self.summary['distance']}, which is near the maximum observed swing radios {self.swing_radius:.1f}", 1)
+            else:
+                alarm(f"Distance to anchor is probably {self.summary['distance']}, maximum observed swing radius is {self.swing_radius:.1f}", 0)
+
+        self.summary['swing_radius'] = self.swing_radius
+        
 def redux(points, min_dist, min_time, max_points):
-    max_distance=90
+    overshoot_add = 0.08
+    pot = 1.2
+    time_discount = 3
     points_redux = []
     lastpoint = None
+    min_time_cnt = 0
+    min_dist_cnt = 0
     for point in points:
         if lastpoint and -lastpoint.time_delta(point)<min_time:
+            min_time_cnt += 1
             continue
         
         if lastpoint and lastpoint.distance_to(point)<min_dist:
+            min_dist_cnt += 1
             continue
 
         lastpoint=point
         points_redux.append(point)
 
+    print(f"DEBUG: killed due to distance: {min_dist_cnt:3d} - killed due to time: {min_time_cnt:3d}")
+    print("DEBUG: original points: %i" % len(points))
+    print("DEBUG: redux points: %i" % len(points_redux))
     if len(points_redux)>max_points:
         overshoot_factor = len(points_redux)/max_points
         print("DEBUG: overshoot factor: %.2f.  min distance: %.2f.  min time: %s. points: %i" % (overshoot_factor, min_dist, min_time, len(points_redux)))
-        return redux(points, min_dist*overshoot_factor**0.8, min_time*overshoot_factor**0.8, max_points)
+        return redux(points, min_dist*(overshoot_factor+overshoot_add)**(pot*((min_time_cnt+0.5)/(0.5+min_time_cnt+min_dist_cnt*time_discount))), min_time*(overshoot_factor+overshoot_add)**(pot*((min_dist_cnt*time_discount+0.5)/(0.5+min_time_cnt+min_dist_cnt*time_discount))), max_points)
     else:
         print("DEBUG: distance steps in meters: %.2f" % min_dist)
-        print("DEBUG: num points: %i" % len(points_redux))
+        print("DEBUG: time steps: %s" % str(min_time))
         return points_redux
 
 
@@ -147,7 +186,7 @@ def read_file():
     assert(data is not None)
     for x in data:
         assert(x is not None)
-    points = [Point(lat=x[0], long=x[1], ts=x[2]) for x in data]
+    points = [Point(lat=x[0], long=x[1], ts=x[2], speed=x[3], heading=x[4]) for x in data]
     return points
 
 async def receive_blobs(reader, writer, mypos):
@@ -168,7 +207,6 @@ async def receive_blobs(reader, writer, mypos):
 
 def main():
     mypos = BoatPosData()
-
     mypos.points = read_file()
     mypos.big_calc()
 
@@ -183,7 +221,7 @@ def main():
 
     #finnpoints.append(points[-1])
 
-    #print(f"DEBUG: max distance: {max_distance:.1f}")
+    print(f"DEBUG: max distance: {mypos.max_distance:.1f}")
 
     #finnpoints = [x for x in finnpoints if x['color'] != 'r']
 
@@ -196,14 +234,8 @@ def main():
     with open('anchoring-summary.json', 'w') as f:
         json.dump(mypos.summary, f, indent=4)
 
-    if (mypos.summary['distance'] > mypos.swing_radius):
-        #alarm("distance to expected anchoring point is %.1f" % mypos.summary['distance'])
-        #alarm(finnurl)
-        swing_radius = (mypos.swing_radius+mypos.summary['distance'])/2.0
-    else:
-        mypos.swing_radius *= 0.99999
-
-    data = [[p.lat, p.long, p.ts] for p in mypos.points]
+    redux_points = redux(mypos.points, 0.02, datetime.timedelta(seconds=4), 65534)
+    data = [[p.lat, p.long, p.ts] for p in redux_points]
     #redux_data = [[p.lat, p.long, p.ts] for p in somepoints]
 
     with open('anchoring-geojson.json', 'w') as f:
@@ -222,5 +254,5 @@ if __name__ == '__main__':
     try:
         main()
     except:
-        alarm("exception in gps parsing script")
+        #alarm("exception in gps parsing script")
         logging.error("exception found", exc_info=True)
