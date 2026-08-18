@@ -1,0 +1,85 @@
+# boattracker configuration — copy to ~/.config/boattracker/config.toml, or run `make config`
+#
+# Precedence is environment variable > this file > default, so a single run can be
+# redirected with `TRACKER_DATA=/mnt/other python -m boattracker.nfl.find_gaps ...`
+# without editing anything.
+#
+# An unknown key here is an error rather than a warning. A typo that silently did nothing
+# would leave you believing the tools had been redirected when they had not.
+#
+# ## Two kinds of setting
+#
+# Most keys have a sensible default and are commented out below; uncomment only what you
+# want to change. The ones marked **REQUIRED** have no default and never will, because
+# they name a particular boat or a particular person — guessing them would make the tools
+# quietly wrong for everybody but their author. Using one that is not set raises an error
+# naming the key; importing the module does not, so the daemon runs without any of them.
+#
+# The daemon (`boattracker-daemon`) needs nothing here. The journey tools need the [boat]
+# section; the photograph and diary tools need their paths.
+
+[paths]
+# The track corpus: nfl-export/, nfl-snapshots/, gpstracker-archive/, nfl-retired/ and the
+# *.gpx exports. Move these together — track_dates.py dates tracks by reading the
+# *filenames* in nfl-export/, so a corpus without them does not fail, it silently stops
+# filtering the gap scans by date.
+#   env: TRACKER_DATA
+# data = "~/solveig-tracks"
+
+# Installation state — currently just the noforeignland API token.
+#   env: TRACKER_ROOT
+# state = "~/.config/boattracker"
+
+# **REQUIRED** by the diary and chapter tools. Leg structure and chapter headings are read
+# from `diary-*.md` here.
+#   env: SOLVEIG_DIR
+# diary = "~/my-boat"
+
+# **REQUIRED** by exif_index and photo_survey: the photograph archive they index.
+#   env: PHOTO_ROOT
+# photos = "~/Pictures"
+
+# One boat's journey record: the upload ledgers, the one-shot exporters documenting how
+# each past upload was built, and the hand-built chapter and fix plans that add_chapters
+# and add_fixes read. Not software, so it is not in this repository. Defaults to
+# `<diary>/journey`.
+#   env: TRACKER_JOURNEY
+# journey = "~/my-boat/journey"
+
+[boat]
+# **ALL REQUIRED** by every tool that talks to noforeignland.
+#
+# `id` is not a secret — it is in the public journey URL — but it is not a constant of the
+# software either. Find it in the URL of your own journey page. `slug` is the boat name as
+# it appears in that URL, which the site checks as the HTTP referer on every API call.
+# `name` goes in the `<Boat> GPX track <date>` mail subject the importer matches on.
+#   env: NFL_BOAT_ID, NFL_BOAT_NAME, NFL_BOAT_SLUG
+# id = 1234567890123456
+# name = "My Boat"
+# slug = "my-boat"
+#
+# Optional, and only used to label an anchor-drift track.
+# callsign = "LJ0000"
+
+[mail]
+# A track is uploaded as a GPX attachment mailed to the importer. `to` is the importer's
+# own address and is the same for everyone, so it has a default. `from` is **REQUIRED**:
+# the sender is matched against your noforeignland account, so it is not cosmetic.
+#   env: NFL_TRACKING_MAIL, NFL_FROM_MAIL
+# to = "tracking@noforeignland.com"
+# from = "you@example.org"
+
+[daemon]
+# Read only by the tracker daemon, which needs nothing else in this file at all.
+
+# Where the anchor alarm looks for a human-written override of the anchoring time and the
+# expected swing radius: two one-line files, `anchoring_time` and
+# `anchoring_expected_swing_radius`. With nothing set there is simply no override, which is
+# the same path taken when the files are absent.
+#   env: BOATTRACKER_STATUS_DIR
+# status_dir = "/var/www/html/myboat.example.org"
+
+# The NSCA service description the anchor alarm reports against. Defaults to
+# "<boat name> may be drifting", or "Boat may be drifting" with no boat configured.
+#   env: BOATTRACKER_ALARM_SERVICE
+# alarm_service = "My Boat may be drifting"

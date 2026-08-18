@@ -1,0 +1,68 @@
+# Install all three stages once:
+#   pre-commit install
+#   pre-commit install --hook-type pre-push
+#   pre-commit install --hook-type commit-msg
+#
+# Note there is deliberately no `ruff-format` hook.  Running it over this tree would
+# rewrite about 1200 lines — the compact `import glob, os, re` style, the aligned
+# coordinate tables, the `a = 1; b = 2` statements — and bury the history of a codebase
+# whose value is largely in what its comments explain.  `ruff check` catches the things
+# that matter; formatting is left alone on purpose.
+
+repos:
+  # === PRE-COMMIT: quick checks on every commit ===
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # `tests/data/` is excluded and must stay excluded.  `test_data.raw` is a recorded
+      # tracker log — a day of fixes as one 1 MB line with no trailing newline,
+      # which is exactly what the tracker writes and what the parser is pinned against.
+      # "Fixing" it edits the fixture the suite measures itself with.
+      - id: trailing-whitespace
+        exclude: ^tests/data/
+      - id: end-of-file-fixer
+        exclude: ^tests/data/
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        # The track corpus is gitignored, but a stray Tracks.gpx or a 13 MB wasm bundle
+        # has been committed here before.
+        args: [--maxkb=1024]
+
+  # === PRE-PUSH: the full suite ===
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        # TRACKER_NOPERF=1 because two budgets in test_parser.py measure wall clock and
+        # fail on a loaded laptop by design — see TODO.md, "Why test_parser.py is slow".
+        # A push should not be blocked by what else the machine happens to be doing.
+        entry: env TRACKER_NOPERF=1 python -m pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+  - repo: https://github.com/lycheeverse/lychee
+    rev: lychee-v0.24.2
+    hooks:
+      - id: lychee
+        args: ["--no-progress", "--timeout", "10", "--cache", "--max-cache-age", "1d", "."]
+        pass_filenames: false
+        stages: [pre-push]
+
+  # === COMMIT-MSG: conventional commits ===
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]

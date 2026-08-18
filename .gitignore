@@ -1,1 +1,40 @@
 .DS_Store
+
+# Raw track data and journey snapshots - kept on disk, not in git.
+# See TODO.md for the plan to move these out of the repository entirely.
+*.gpx
+!tests/data/test_raymarine.gpx
+*.gfx
+nfl-snapshots/
+nfl-export/
+anchoring-*.json
+geojson.json
+jtt.json
+# written by the anchor-alarm daemon, and by test_parser.py when it replays a recording
+stops.json
+stops.log
+summary.json
+gaps.json
+exif-gps-cache.tsv
+__pycache__/
+noforeignland-journey-*.json
+gpstracker-archive/
+
+# bearer credential for the live noforeignland account - never commit
+.nfl-token
+
+# packaging and tooling
+/dist/
+/build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.lycheecache
+.venv/
+# written by hatch-vcs at build time, from the git tag
+src/boattracker/_version.py
+
+# emacs
+*~
+\#*\#
+.\#*

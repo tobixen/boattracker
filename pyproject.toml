@@ -1,0 +1,115 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "boattracker"
+dynamic = ["version"]
+description = "GPS/GSM tracker daemon for a boat, and tools for curating the track it records"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Tobias Brox", email = "tobias@tobixen.no" }]
+keywords = ["gps", "tracking", "sailing", "boat", "gpx", "anchor-alarm", "tk103"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: End Users/Desktop",
+  "Topic :: Scientific/Engineering :: GIS",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+# `requests` was imported by the daemon and never used; ruff found it on the first run,
+# so it is not a dependency.  numpy appears only in `historic/`, which is not packaged.
+dependencies = ["geopy>=2.4"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.16", "pre-commit>=4.0"]
+
+[project.scripts]
+boattracker = "boattracker.__main__:main"
+boattracker-daemon = "boattracker.tracker.gpsparser:run"
+
+[project.urls]
+Repository = "https://github.com/tobixen/boattracker"
+Issues = "https://github.com/tobixen/boattracker/issues"
+
+[tool.hatch.version]
+source = "vcs"
+# No tags exist yet.  Without this, a build from an untagged checkout fails outright
+# rather than producing something installable.
+fallback-version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/boattracker/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/boattracker"]
+
+[tool.hatch.build.targets.sdist]
+# The track corpus is not part of the software and is large; `historic/` is the record of
+# past uploads rather than code anyone should install.
+exclude = [
+  "/nfl-export",
+  "/nfl-snapshots",
+  "/nfl-retired",
+  "/gpstracker-archive",
+  "/Raymarine",
+  "*.gpx",
+  "*.gfx",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["src/boattracker/_version.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "PT"]
+# The first ruff run over this tree found 247 things.  One was a real bug — `receive_data()`
+# in the daemon referenced a name that only existed inside `main()`, so it would have raised
+# NameError if anything had called it; nothing did, and it is deleted.  The rest were style,
+# and the ones switched off below are switched off deliberately rather than left to rot.
+ignore = [
+  "E501",   # long lines: this project writes coordinate tables that do not wrap well
+  "E401",   # `import glob, os, re` is the house style throughout
+  "E402",   # imports after a long explanatory module docstring, deliberately
+  "E702",   # `a = 1; b = 2` likewise
+  "E731",   # assigned lambdas, likewise
+  "E741",   # `l` as a variable name, likewise
+  "UP031",  # printf-style formatting in logging calls, likewise
+  "PT006",  # parametrize argnames as a string
+  "PT011",  # `pytest.raises(ValueError)` with no match= is fine here
+  "PT018",  # `assert a and b` reads better than two asserts in these tests
+  "B007",   # unused loop variable, usually an index kept for readability
+  # `zip(a, b, strict=...)`.  Worth having on new code, but adding `strict=True` to twenty
+  # existing call sites would turn silent truncation into an exception in paths that have
+  # been running for years — a behaviour change disguised as a lint fix.
+  "B905",
+  # A local assigned and not read is nearly always a *side-effecting* call here whose
+  # return value is discarded — `mypos.summary(...)` writes the JSON and log files.
+  # Ruff's fix drops the assignment, which is fine, but the rule flags them all the same.
+  "F841",
+  # Bare `except:` — four sites, all in the live daemon's error handling, where narrowing
+  # to `except Exception` would change which signals propagate.  Recorded in TODO.md as a
+  # thing to fix deliberately, not as a drive-by.
+  "E722",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["boattracker"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests say `assert x == y` and rebind fixtures freely.
+"tests/**" = ["B011"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+# Lets a fresh checkout run the suite without installing first.  An editable install
+# (`make dev`) is still the supported way to *use* the tools.
+pythonpath = ["src"]
+# A warning is usually a real problem.  Anything ignored below must say why.
+filterwarnings = ["error"]
+norecursedirs = ["nfl-export", "nfl-snapshots", "gpstracker-archive", "Raymarine"]

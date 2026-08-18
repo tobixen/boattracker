@@ -1,0 +1,31 @@
+# Link checker configuration, auto-discovered by both the pre-commit hook and the
+# GitHub Actions workflow.
+
+# The documentation is full of API endpoints written out so a reader can see the shape of
+# the request. They are not links to follow: they answer 401/403 without a bearer token,
+# and hitting them from CI would be pointless traffic against somebody else's service.
+exclude = [
+  "^https?://(www\\.)?noforeignland\\.com/api/",
+  # The boat's own journey page and the tracker's server. Both are live but both rate-limit
+  # or block unauthenticated automation, so a failure here says nothing about the docs.
+  "^https?://(www\\.)?noforeignland\\.com/map/",
+  "^https?://solveig\\.oslo\\.no",
+  "^https?://srv1\\.tobixen\\.no",
+]
+
+# Anchors are not resolved: several documents link to headings that the renderer generates.
+include_fragments = false
+
+exclude_path = [
+  "nfl-export",
+  "nfl-snapshots",
+  "nfl-retired",
+  "gpstracker-archive",
+  "Raymarine",
+]
+
+# 429 is rate limiting rather than a broken link; 403 is commonly a bot block.
+accept = ["200..=204", "403", "429"]
+
+max_retries = 3
+timeout = 20
