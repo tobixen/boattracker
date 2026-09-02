@@ -63,15 +63,20 @@ def journey_request():
 
 
 def fetch(path=None):
+    return json.loads(fetch_bytes(path))
+
+
+def fetch_bytes(path=None):
+    """The journey reply exactly as the server (or the file) has it, unparsed."""
     if path:
-        with open(path) as f:
-            return json.load(f)
+        with open(path, 'rb') as f:
+            return f.read()
     # 2.4 MB, and it normally arrives in ~2 s (measured 2026-08-11). But a session on
     # 2026-08-09 hit `TimeoutError` at 120 s and had to work from a snapshot for the rest of
     # the day, so the server is occasionally very slow rather than the journey being too big
     # to fetch. Waiting the slowness out beats failing in a way that reads like "too large".
     with urllib.request.urlopen(journey_request(), timeout=600) as r:
-        return json.loads(r.read())
+        return r.read()
 
 
 def fixes_and_lines(doc):

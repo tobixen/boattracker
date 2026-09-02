@@ -240,9 +240,31 @@ cookies, and the reasons are documented there rather than rediscovered.
 ## 1. Snapshot before anything
 
 ```
-curl -s 'https://www.noforeignland.com/api/v1/boat/journey?boatId=4718293690613760&showStories=true' \
-     -o nfl-snapshots/snapshot-$(date +%Y%m%d)-before.json
+python3 -m boattracker.nfl.snapshot --raw \
+        --out nfl-snapshots/snapshot-$(date +%Y%m%d-%H%M)-before.json
 ```
+
+That is the working copy, one per write-session, and it stays out of git — byte for byte the
+blob `curl` used to write, which is still the fallback if the package is not installed.
+`--raw` refuses to overwrite an existing file, since a second session on the same day would
+otherwise replace the only record of what the first one deleted:
+
+```
+curl -s 'https://www.noforeignland.com/api/v1/boat/journey?boatId=4718293690613760&showStories=true' \
+     -o nfl-snapshots/snapshot-$(date +%Y%m%d-%H%M)-before.json
+```
+
+**Afterwards, when the writes are done and verified, update the tracked snapshot too:**
+
+```
+python3 -m boattracker.nfl.snapshot --if-changed
+```
+
+which rewrites `<journey>/journey-snapshot.json` in the line-oriented form and is meant to
+be committed. That file is what makes `git log -p` able to answer "when did this fix
+disappear, and what else moved when it did" — the question `NFL-EXPORT-LOG.md` otherwise has
+to be written by hand to answer. `--if-changed` keeps a run that found nothing from
+producing a commit consisting solely of the two calendar-derived counters.
 
 Non-negotiable, and not merely belt-and-braces:
 

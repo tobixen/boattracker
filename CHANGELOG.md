@@ -13,6 +13,13 @@ making this a python project rather than a directory of scripts.
 
 ### Added
 
+- `boattracker.nfl.snapshot`: fetches the journey and writes it one vertex per line, so a
+  single snapshot can be version controlled and each session's changes read off `git log
+  -p`. Verifies the reformatted file parses back to the source before writing. `--raw`
+  reproduces the blob the `curl` line in `IMPROVE-TRACKS.md` used to write, for the
+  pre-write copies in `nfl-snapshots/` byte for byte and never overwrites one, and
+  `--if-changed` suppresses a write when only the two calendar-derived counters moved. A key
+  the layout does not know is kept and reported, since it means the API changed.
 - `pyproject.toml`: a hatchling build with `hatch-vcs` versioning from git tags, ruff and
   pytest configuration, and `boattracker` / `boattracker-daemon` console entry points.
 - A runtime config file, `~/.config/boattracker/config.toml`, layered under the

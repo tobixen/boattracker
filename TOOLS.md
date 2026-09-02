@@ -70,6 +70,7 @@ Two generations of script live here, and the difference matters:
 | Script | What it does |
 |---|---|
 | `nfl_auth.py` | the API token: capture, store, decode, probe. Explains why it cannot be scraped |
+| `snapshot.py` | **the journey, as a file git can diff.** Fetches and reformats to one vertex per line, verifying the result parses back to the source before writing; `--raw` reproduces the `curl` blob byte for byte for the pre-write copies in `nfl-snapshots/` and never overwrites one, `--if-changed` refuses to write when only the calendar-derived counters moved |
 | `import_sdcard.py` | deduplicates a fresh SD-card export against the corpus by `raymarine:GUID` |
 | `track_dates.py` | date range per track and per segment, derived from `nfl-export/` filenames |
 | `find_gaps.py` | **the gap finder.** Four modes; `partial` is the default and the one to trust |
