@@ -17,6 +17,26 @@ HyperOS requires a Mi account at least 30 days old, one unlock per account per
 year, a knowledge quiz, 3-7 days of waiting, a full data wipe, and it stops OTA
 updates.
 
+## What to do with the export once it has arrived
+
+    python3 -m boattracker.nfl.import_phone_export --write --commit
+
+`import_phone_export.py` takes the newest `.kmz` in each of the two mirrors below, unpacks
+the single `.kml` inside it, and installs it as `<data>/../phone/<phone>.kml` — a git
+repository of its own, committed one export at a time, one file per phone since each phone
+records its own track. Once the commit is made the `.kmz` can be deleted from the mirror,
+which tidies the phone too; the tool says when.
+
+Three things that module's docstring explains and this file should not repeat: the KML is
+committed rather than the KMZ, because a zip cannot be delta-compressed and is not even
+reproducible; the export is append-only and already one fix per line, so nothing is
+reformatted; and a new export that has **lost** recorded positions is refused rather than
+installed, because the committed copy is then the better one.
+
+The repository is deliberately **not** part of `~/solveig`: that working tree is served on
+the open web, and the phone's track is a person's movements rather than the boat's. See
+`tracks/phone/README.md` in the corpus.
+
 ## Current setup: export button + receive-only Syncthing folders
 
 In Organic Maps: Bookmarks -> the three-dot menu -> Export KMZ / GPX / GeoJSON.
