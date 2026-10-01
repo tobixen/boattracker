@@ -14,7 +14,7 @@ exclude = [
 ]
 
 # Anchors are not resolved: several documents link to headings that the renderer generates.
-include_fragments = false
+include_fragments = "none"
 
 exclude_path = [
   "nfl-export",

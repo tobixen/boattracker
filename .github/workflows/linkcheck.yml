@@ -36,6 +36,8 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           fail: false
+          # The same lychee as the pre-commit hook's rev, so both read lychee.toml alike.
+          lycheeVersion: v0.24.2
           # Excludes and accepted status codes live in lychee.toml, which is
           # auto-discovered here and by the pre-commit hook alike.
           args: >-
