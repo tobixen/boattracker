@@ -436,6 +436,12 @@ been consumed straight from `~/Downloads`.
 ## Smaller items
 
 * **Unpushed commits on `master`.** Nothing has been pushed, by policy.
+* **The suite is not hermetic against `~/.gitconfig`.** `conftest.py` isolates the
+  environment, but the developer's git config still reaches the tests that run git. That
+  is why the phone-import `--commit` tests passed locally and failed on CI, which has no
+  git identity (fixed 2026-10-02 per fixture). A `commit.gpgsign` or a global hook would
+  diverge the same way. Set `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` and
+  `GIT_AUTHOR_*`/`GIT_COMMITTER_*` in `conftest.py`, and drop the fixture's local config.
 
 ## Why `test_parser.py` is slow — measured 2026-08-15
 
