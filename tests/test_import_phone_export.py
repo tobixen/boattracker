@@ -114,7 +114,7 @@ def test_newest_export_returns_none_when_there_is_nothing(tmp_path):
 ## main(), end to end: one phone mirror each, a target repository, no real phone.
 
 def git(*args, cwd):
-    return subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', *args],
+    return subprocess.run(['git', *args],
                           cwd=cwd, check=True, capture_output=True, text=True).stdout
 
 
@@ -132,6 +132,9 @@ def repo(tmp_path):
     r = tmp_path / 'phone'
     r.mkdir()
     git('init', '-q', cwd=r)
+    # The tool under test commits with whatever identity git finds; a CI runner has none.
+    git('config', 'user.name', 't', cwd=r)
+    git('config', 'user.email', 't@t', cwd=r)
     return r
 
 
