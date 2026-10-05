@@ -40,6 +40,10 @@ source = "vcs"
 # No tags exist yet.  Without this, a build from an untagged checkout fails outright
 # rather than producing something installable.
 fallback-version = "0.0.0"
+# Only v<digit>* tags are releases. The default describe matches any tag
+# containing a digit, so a date-stamped local tag (a pre-rewrite backup,
+# say) could become the nearest tag, and so the version, and break the build.
+raw-options = { scm = { git = { describe_command = "git describe --dirty --tags --long --abbrev=40 --match v[0-9]*" } } }
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/boattracker/_version.py"
