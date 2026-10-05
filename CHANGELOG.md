@@ -17,6 +17,8 @@ making this a python project rather than a directory of scripts.
   Downloads mirror into a git repository of its own, one file per phone and one commit per
   export with `--commit`. Refuses an export that has lost recorded positions, coordinates or
   placemarks the committed copy holds, since these exports are cumulative and only ever grow.
+  After committing it pushes to any remote `git-ai-remote-policy` marks as an auto-push
+  backup.
 - `boattracker.nfl.snapshot`: fetches the journey and writes it one vertex per line, so a
   single snapshot can be version controlled and each session's changes read off `git log
   -p`. Verifies the reformatted file parses back to the source before writing. `--raw`

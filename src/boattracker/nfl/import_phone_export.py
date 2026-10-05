@@ -41,7 +41,9 @@ a real deletion is a decision, a collection that empties itself is an accident.
     python3 -m boattracker.nfl.import_phone_export --write --commit   # install and commit
 
 Only after the commit is the `.kmz` safe to delete from the mirror; the tool says so then,
-and not before.
+and not before. After committing, `--commit` also pushes to every remote that
+`git-ai-remote-policy autopush` names as an ungated backup, the same remotes `git-ai-commit`
+pushes to; a failed push is reported and the commit stays local until the next import.
 """
 import argparse
 import glob
@@ -208,8 +210,40 @@ def import_one(phone, src, out, write, commit):
             print('commit failed; the export is written but not committed:\n%s%s'
                   % (r.stdout, r.stderr), file=sys.stderr)
             return 1
+    auto_push(out)
     print('\nThe .kmz in the phone mirror can now be deleted; Syncthing will tidy the phone too.')
     return 0
+
+
+def auto_push(out):
+    """Push to the remotes `git-ai-remote-policy autopush` names as ungated backups.
+
+    The policy tool, not this module, decides which remotes qualify, so the remotes are the
+    ones `git-ai-commit` pushes to, though without its rate limit, and the tool is looked up
+    on PATH rather than next to `git-ai-commit`. Without it nothing is pushed, and that is said.
+    It runs after an unchanged re-import too, so a backup a failed push left behind catches
+    up. A failure is reported and not fatal: the export is committed, which is what makes
+    the .kmz deletable, and the next import pushes it along with anything newer.
+    """
+    policy = shutil.which('git-ai-remote-policy')
+    branch = git(out, 'symbolic-ref', '--quiet', '--short', 'HEAD').stdout.strip()
+    if not policy:
+        print('  git-ai-remote-policy not found on PATH; nothing was pushed', file=sys.stderr)
+        return
+    if not branch:
+        return
+    r = subprocess.run([policy, '-C', out, 'autopush'], capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        remote, _, force = line.partition('\t')
+        if not remote:
+            continue
+        # `lease` is the only value that permits a forced push, as in git-ai-commit.
+        args = ['push', '--quiet'] + (['--force-with-lease'] if force == 'lease' else [])
+        print('  pushing to %s ...' % remote)
+        p = git(out, *args, remote, 'HEAD:refs/heads/%s' % branch)
+        if p.returncode != 0:
+            print('  push to %s failed; the commit is local only until the next import:\n%s'
+                  % (remote, p.stderr.strip()), file=sys.stderr)
 
 
 def main(argv=None):

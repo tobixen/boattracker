@@ -196,3 +196,93 @@ def test_a_file_missing_from_the_working_tree_is_checked_against_head(phones, re
     os.utime(phones['newmi'] / 'My Places (1).kmz', (4000000000, 4000000000))
     assert run('--out', str(repo), '--phone', 'newmi', '--write') == 1
     assert not (repo / 'newmi.kml').exists()
+
+
+## Auto-push after --commit: to the remotes git-ai-remote-policy names, and only those.
+
+@pytest.fixture
+def backup(tmp_path, repo, monkeypatch):
+    """A bare remote of `repo`, and a stub policy tool on PATH naming it as auto-push."""
+    bare = tmp_path / 'backup.git'
+    git('init', '-q', '--bare', str(bare), cwd=tmp_path)
+    git('remote', 'add', 'backup', str(bare), cwd=repo)
+    bin_ = tmp_path / 'bin'
+    bin_.mkdir()
+    policy_stub(bin_, 'backup\tpolicy')
+    monkeypatch.setenv('PATH', '%s%s%s' % (bin_, os.pathsep, os.environ['PATH']))
+    return bare
+
+
+def policy_stub(bin_, *lines):
+    """(Re)write the stub policy tool in `bin_` to print `lines`."""
+    stub = bin_ / 'git-ai-remote-policy'
+    stub.write_text('#!/bin/sh\n' + ''.join("printf '%s\\n'\n" % l.replace('\t', '\\t') for l in lines))
+    stub.chmod(0o755)
+
+
+def test_commit_pushes_to_an_autopush_remote(phones, repo, backup):
+    write_kmz(phones['newmi'] / 'My Places.kmz', kml(A))
+    assert run('--out', str(repo), '--phone', 'newmi', '--write', '--commit') == 0
+    branch = git('symbolic-ref', '--short', 'HEAD', cwd=repo).strip()
+    assert git('rev-parse', branch, cwd=backup) == git('rev-parse', 'HEAD', cwd=repo)
+
+
+def test_an_identical_reimport_still_catches_the_backup_up(phones, repo, backup):
+    write_kmz(phones['newmi'] / 'My Places.kmz', kml(A))
+    git('remote', 'set-url', 'backup', str(backup) + '-unreachable', cwd=repo)
+    assert run('--out', str(repo), '--phone', 'newmi', '--write', '--commit') == 0
+    git('remote', 'set-url', 'backup', str(backup), cwd=repo)
+    assert run('--out', str(repo), '--phone', 'newmi', '--write', '--commit') == 0
+    branch = git('symbolic-ref', '--short', 'HEAD', cwd=repo).strip()
+    assert git('rev-parse', branch, cwd=backup) == git('rev-parse', 'HEAD', cwd=repo)
+
+
+def test_a_failed_push_is_reported_but_the_import_stands(phones, repo, backup, capsys):
+    git('remote', 'set-url', 'backup', str(backup) + '-unreachable', cwd=repo)
+    write_kmz(phones['newmi'] / 'My Places.kmz', kml(A))
+    assert run('--out', str(repo), '--phone', 'newmi', '--write', '--commit') == 0
+    out, err = capsys.readouterr()
+    assert 'push to backup failed' in err
+    assert 'can now be deleted' in out
+
+
+def test_no_policy_tool_means_no_push(phones, repo, tmp_path, monkeypatch):
+    bare = tmp_path / 'other.git'
+    git('init', '-q', '--bare', str(bare), cwd=tmp_path)
+    git('remote', 'add', 'other', str(bare), cwd=repo)
+    monkeypatch.setattr(import_phone_export.shutil, 'which', lambda name: None)
+    write_kmz(phones['newmi'] / 'My Places.kmz', kml(A))
+    assert run('--out', str(repo), '--phone', 'newmi', '--write', '--commit') == 0
+    assert git('for-each-ref', cwd=bare) == ''
+
+
+def test_a_missing_policy_tool_is_said(phones, repo, monkeypatch, capsys):
+    # cron or systemd may run with a PATH that lacks it; a backup that silently never
+    # happens is the failure worth hearing about.
+    monkeypatch.setattr(import_phone_export.shutil, 'which', lambda name: None)
+    write_kmz(phones['newmi'] / 'My Places.kmz', kml(A))
+    assert run('--out', str(repo), '--phone', 'newmi', '--write', '--commit') == 0
+    assert 'git-ai-remote-policy not found' in capsys.readouterr().err
+
+
+def test_only_the_named_remotes_are_pushed_and_lease_forces(phones, repo, backup, tmp_path):
+    other = tmp_path / 'other.git'
+    git('init', '-q', '--bare', str(other), cwd=tmp_path)
+    git('remote', 'add', 'other', str(other), cwd=repo)
+    policy_stub(tmp_path / 'bin', 'backup\tlease')
+    write_kmz(phones['newmi'] / 'My Places.kmz', kml(A))
+    assert run('--out', str(repo), '--phone', 'newmi', '--write', '--commit') == 0
+    # A rewrite the backup must follow: only `lease` lets the push replace its branch.
+    git('commit', '-q', '--amend', '-m', 'rewritten', cwd=repo)
+    assert run('--out', str(repo), '--phone', 'newmi', '--write', '--commit') == 0
+    branch = git('symbolic-ref', '--short', 'HEAD', cwd=repo).strip()
+    assert git('rev-parse', branch, cwd=backup) == git('rev-parse', 'HEAD', cwd=repo)
+    assert git('for-each-ref', cwd=other) == ''
+
+
+def test_a_detached_head_is_not_pushed(phones, repo, backup):
+    write_kmz(phones['newmi'] / 'My Places.kmz', kml(A))
+    git('commit', '-q', '--allow-empty', '-m', 'base', cwd=repo)
+    git('checkout', '-q', '--detach', cwd=repo)
+    assert run('--out', str(repo), '--phone', 'newmi', '--write', '--commit') == 0
+    assert git('for-each-ref', cwd=backup) == ''

@@ -25,7 +25,9 @@ updates.
 the single `.kml` inside it, and installs it as `<data>/../phone/<phone>.kml` — a git
 repository of its own, committed one export at a time, one file per phone since each phone
 records its own track. Once the commit is made the `.kmz` can be deleted from the mirror,
-which tidies the phone too; the tool says when.
+which tidies the phone too; the tool says when. The commit is then pushed to any remote
+configured as an ungated auto-push backup (`remote.<r>.aiPushGate none`, `aiAutoPush true`),
+which for the phone repository is `srv1`.
 
 Three things that module's docstring explains and this file should not repeat: the KML is
 committed rather than the KMZ, because a zip cannot be delta-compressed and is not even
