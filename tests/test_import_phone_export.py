@@ -132,9 +132,6 @@ def repo(tmp_path):
     r = tmp_path / 'phone'
     r.mkdir()
     git('init', '-q', cwd=r)
-    # The tool under test commits with whatever identity git finds; a CI runner has none.
-    git('config', 'user.name', 't', cwd=r)
-    git('config', 'user.email', 't@t', cwd=r)
     return r
 
 
