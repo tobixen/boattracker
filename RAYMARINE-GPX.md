@@ -187,15 +187,15 @@ of the GUID step; that was wrong.
 
 Use the **track names** instead. They carry the plotter's own running counter, so a
 missing number is a missing track. On that test the corpus holds Track 1, 3, 4, 7 and
-then every number from 7 to 62 — with `Med 2023` and `ToSantorini2024` being renamed
+then every number from 7 to 72 (63–72 counted 2026-11-06) — with `Med 2023` and `ToSantorini2024` being renamed
 tracks, presumably 2 and one of 5/6. So at most one early track is genuinely absent.
 
 ### Recording gaps: check contiguity instead
 
 What the GUID step was mistaken for is a **recording gap** — the plotter switched off
 between two tracks. The test is whether the last point of track N and the first point
-of track N+1 coincide. 54 of the 60 boundaries in the corpus are contiguous to within
-300 m; six are not:
+of track N+1 coincide. 62 of the 70 boundaries in the corpus are contiguous to within
+300 m; eight are not:
 
 | Boundary | Unrecorded |
 |---|---|
@@ -205,13 +205,16 @@ of track N+1 coincide. 54 of the 60 boundaries in the corpus are contiguous to w
 | Track 41 → Track 42 | 43.54 nm |
 | Track 45 → Track 46 | 22.62 nm |
 | Track 60 → Track 61 | 37.69 nm |
+| Track 62 → Track 63 | 2.50 nm |
+| Track 67W → Track 68 | 2.82 nm |
 
-249 nm in total. The Track 41 → 42 gap is the one that matters for dating: it covers
+254 nm in total. 67W → 68 is a third cause: the plotter may well have been on, but track
+recording was not switched on from 2026-09-01 until mid-passage on 09-08. The Track 41 → 42 gap is the one that matters for dating: it covers
 the stretch containing Kumkale and Yeniköy limani, which is why the 2025-08-05
 photograph taken at Yeniköy has no track to sit on. That water was sailed, it was
 simply not recorded, so nothing can recover it.
 
-**Two different causes.** Most of these are the plotter being switched off, but
+**Three different causes**, the third being 67W → 68 above. Most of these are the plotter being switched off, but
 Track 60 → 61 is not: Tracks 58, 59 and 60 all end at 9981, 9985 and 9987 points, i.e.
 at the ~10,000-point cap. Track 60 filled up in mid-passage on 2026-07-23, two hours out
 of Varna, and recording stopped there rather than rolling over into a new track — the
@@ -246,6 +249,7 @@ tracked, as a test fixture). They are large; do not `git add -A` here.
 | `Tracks202607.gpx` | 147 784 | 46–60, and `57.202509` | N Aegean → Marmara → Bulgarian Black Sea coast (lat 39.17–43.25, lon 25.80–29.12) |
 | `TracksA.gpx` | 15 161 | 61–62 | the 2026-07-27 Sozopol → Varna return and the 07-28 Chaika day. Exported 2026-07-29; Track 62 is uncapped at 5166 points, i.e. still the live track |
 | `Tracks.gpx` | 61 962 | 61–62, 63–67W | exported 2026-08-13; 46 301 points are new (63, 64Xxx, 65, 66, 67W). The 2026-07-29 → 08-12 Varna locals, the Constanța return trip and the lay-up. **484 of its points are in Peru** — see below |
+| `TracksV.gpx` | 109 042 | 61–67W, 68–72 | exported 2026-11-06; 47 080 points are new (68–72). 2026-09-08 → 11-06: Varna locals, then south to Sozopol and Nessebar. 68–71 stop at the cap (9986–9995) **but chain end to start** — each begins where the last ended, so here the cap rolled over to a new track rather than stopping recording. Track recording was not switched on 09-01 → 09-08 morning (owner, 2026-11-06); 68 s0 starts at sea |
 | `TracksQ.gpx` | 141 595 | ToSantorini2024, 7–20 | Aegean, Greece, Turkey (lat 35.34–44.20, lon 23.25–29.13) |
 | `TracksC.gpx` | 53 005 | 21–26P | Marmara, Bosphorus, W Black Sea (lat 40.42–43.19, lon 27.03–29.12) |
 | the `*.gpx` crops | 31 220 | 1, Med 2023, 3, 4 | Portugal → Baltic delivery, cropped into `benelux.gpx`, `lisbon2.gpx`, `lisbon3.gpx`, `france.gpx`, `france-etc.gpx`, `germany1.gpx`, `Poland1.gpx`, `to-lisbon.gpx`, `raymarine_rest.gpx`, `tmp.gpx` |
