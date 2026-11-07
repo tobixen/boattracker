@@ -435,6 +435,14 @@ been consumed straight from `~/Downloads`.
 
 ## Smaller items
 
+* **`timestamp_segments` needs a `--per-day` mode.** `main()` matches each segment against
+  the whole phone export; revisits to the same anchorages (G G Yacht Club, Chaika, Tortuga
+  in autumn 2026) interleave, Kendall's tau fails, and 33 of 48 segments came out undated or
+  wrong. Matching one UTC day at a time dated nearly all of them (2026-11-06):
+  `match(s, fixes, lo=day-6h, hi=day+30h, min_tau=0.7)` — the window overlaps the
+  neighbouring days so a passage across midnight UTC still matches — keeping only matches
+  whose mean segment speed is 0.3–9 kn and whose duration is under 14 h. A segment matched
+  on two days needs a rule (the throwaway took the first). Write the failing test first.
 * **Unpushed commits on `master`.** Nothing has been pushed, by policy.
 
 ## Why `test_parser.py` is slow — measured 2026-08-15
