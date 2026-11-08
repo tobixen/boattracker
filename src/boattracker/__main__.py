@@ -35,6 +35,7 @@ NFL = [
     ("put_fix_path", "attach a path to an existing fix"),
     ("add_chapters", "hand-built journey chapters"),
     ("chapters_from_diary", "diary headings into journey chapters"),
+    ("time_and_positions", "the diary's Time and positions sections, from phone, journey and photographs"),
     ("reimport_journey", "the live journey, exported to GPX"),
     ("prune_superseded_fixes", "hand-placed fixes that real track now covers"),
     ("dedupe_tracker_lines", "rebuild part-duplicated tracker lines"),

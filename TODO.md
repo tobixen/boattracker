@@ -435,6 +435,18 @@ been consumed straight from `~/Downloads`.
 
 ## Smaller items
 
+* **`time_and_positions`: the departure window ignores the 7 kn cap.** When the shortest
+  possible passage is capped by speed, `render()` still prints the whole departure window,
+  so departure and duration disagree - e.g. departed 22:30 +/- 2 h, "moved for 3:17",
+  arrived 00:08, which leaves 1:38. Narrow the departure by `tmin` before rendering.
+* **`time_and_positions` needs a land/sea check.** Asked for 2026-11-08: a track point on
+  land is the phone carried ashore and should be dropped; more than 0.5 nm from land, a
+  "stop" under 30 minutes is slow sailing to be folded into the passage; a stop more than
+  1 nm from land is "at sea". Until then the owner's calls are entered one by one in
+  PLACES.md as `at sea` / `ashore (not the boat)`, and each one tends to expose the next
+  point over. The OSM land polygons (~900 MB) were judged too heavy; look for something
+  lighter first - the owner's suggestion is the colour of the OSM map tile under the
+  point, blue or green.
 * **`timestamp_segments` needs a `--per-day` mode.** `main()` matches each segment against
   the whole phone export; revisits to the same anchorages (G G Yacht Club, Chaika, Tortuga
   in autumn 2026) interleave, Kendall's tau fails, and 33 of 48 segments came out undated or

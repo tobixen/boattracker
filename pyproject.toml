@@ -25,7 +25,10 @@ classifiers = [
 dependencies = ["geopy>=2.4"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.16", "pre-commit>=4.0"]
+dev = ["pytest>=8.0", "ruff>=0.16", "pre-commit>=4.0", "tzfpy>=2.1"]
+# The timezone at a position, which time_and_positions needs to tell which diary day a UTC
+# moment belongs to.  A compiled wheel with its own boundary data, hence optional.
+diary = ["tzfpy>=2.1"]
 
 [project.scripts]
 boattracker = "boattracker.__main__:main"

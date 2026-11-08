@@ -13,6 +13,16 @@ making this a python project rather than a directory of scripts.
 
 ### Added
 
+- `boattracker.nfl.time_and_positions`: writes the diary's "Time and positions" sections for
+  passage days from the phone tracks, the journey snapshot and GPS-tagged photographs. A
+  stop counts only where the journey has a fix, and is reported at the fix's position, so a
+  walk ashore with the phone is not a move. Each day takes its legs from the phone when the
+  phone ran all day, otherwise from the journey, with each leg end re-timed by the phone
+  wherever the phone saw it. Times are UTC; the diary day is the local day at the boat's
+  position, which needs the new `diary` extra (`tzfpy`). Spots named `at sea` or `ashore
+  (not the boat)` in PLACES.md are the owner's verdicts: a short stop at the first is folded
+  into the passage as slow sailing, and track points at the second are dropped. A rerun
+  replaces only its own sections in the range given, and names any day that lost one.
 - `boattracker.nfl.import_phone_export`: moves an Organic Maps export out of the phone's
   Downloads mirror into a git repository of its own, one file per phone and one commit per
   export with `--commit`. Refuses an export that has lost recorded positions, coordinates or
