@@ -3,7 +3,7 @@
 The index of every tool for merging Raymarine chartplotter tracks with the noforeignland
 journey. The live ones are modules in `boattracker.nfl` — run them as
 `python -m boattracker.nfl.<name> --help`, or `boattracker` for this list on the terminal.
-The one-shot scripts are files in `historic/` and are not expected to run.
+The one-shot scripts are files in `journey/archive/` and are not expected to run.
 
 **A `journey/` prefix means the journey record** — one boat's ledgers, one-shot exporters
 and hand-built plans, which are not software and left this repository on 2026-08-18. It is
@@ -86,7 +86,7 @@ Two generations of script live here, and the difference matters:
 | `merge_leg.py` | **one fix, one leg.** Merges every timed vertex the journey holds for a leg into a single track — plotter positions, tracker times — reports the 1 nm+ gaps left, `--fill` splices local plotter track into them, `--write` emits the GPX keeping every vertex's own time |
 | `replace_tracker_chords.py` | replaces a tracker straight line with plotter geometry; **excludes chords whose plotter cover is already on the journey** — those need the chord deleting, not the track sending again |
 | `chapters_from_diary.py` | diary `#` headings into journey chapters; reconciles by start instant, so an edited heading is a rename in place and `--post` is safe to re-run (see `NFL-CHAPTERS.md`) |
-| `time_and_positions.py` | **the diary's "Time and positions" sections** for passage days, from the phone tracks, the journey and photographs: each day from the phone when it ran all day, else from the journey, with a journey leg the phone recorded more precisely re-timed by it. Times are UTC; the local zone (needs the `diary` extra, `tzfpy`) only decides which diary day a moment belongs to. A rerun replaces its own sections for the days asked for and never touches hand-maintained ones |
+| `time_and_positions.py` | **the diary's "Time and positions" sections** for passage days, from the phone tracks, the journey and photographs: stops anchored on journey fixes; each day from the phone when it ran all day, else from the journey, re-timed by the phone leg by leg and end by end. How to run it, its inputs and the PLACES.md conventions: `SOURCES.md`, "Building the `### Time and positions` sections". Times are UTC; the local zone (needs the `diary` extra, `tzfpy`) only decides which diary day a moment belongs to. A rerun replaces its own sections for the days asked for and never touches hand-maintained ones |
 | `add_chapters.py` | hand-built chapters no diary covers; the plan file is desired state, `--prune` reconciles |
 | `add_fixes.py` | backdated position fixes, e.g. at a berth so a chapter boundary renders there. **Write the UTC offset into the plan** — a naive timestamp is read as local time |
 | `omaps_export.py` | the Organic Maps phone export (.kmz/.kml) as timestamped fixes; absorbs the mixed namespaces and the phone's clock glitches |
@@ -111,7 +111,7 @@ trusting an answer. In short:
 
 Every script that recorded how one particular past upload was built — the per-period
 exporters and the session scripts — moved to the **journey record** on 2026-08-18,
-`[paths] journey`/`historic/`, because they document what was done to one boat's journey
+`[paths] journey`/`archive/`, because they document what was done to one boat's journey
 rather than how to do this work. There are 33 of them and they are **not expected to run**;
 several cannot, their paths pointing at scratchpads deleted long ago.
 

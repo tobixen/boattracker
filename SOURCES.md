@@ -158,28 +158,73 @@ Ranked by how much weight to give them.
 | **noforeignland journey API** | 2025-04 .. 2025-09 | — | **poor**: 50 hand-placed `Manual` / `Check in` points. Do not use as a reference fix |
 | **boattracker JSON/GPX** | 2023-12-30 .. 2024-01-01 | good | a single 3-day anchoring episode at Dubrovnik |
 
-### The 2026 `### Time and positions` blocks are reconstructed, not recorded
+### The `### Time and positions` blocks after February 2025 are reconstructed, not recorded
 
-**Written 2026-08-15, and this is a trap by construction.** The 2021–2025 blocks in the
-diaries were emitted by the old tracker's own stop detection from real GPS fixes. The
-tracker has not run since, so fourteen blocks covering **2026-07-26 and 07-29 .. 08-12**
-were written by hand into `diary-2026.md` in the same format, from the plotter track and
-the phone. They look identical in every respect, down to the `YYYY-MM-DDTHHMMSS UTC`
-stamps.
+**A trap by construction.** The blocks up to 2025-02 were emitted by the old tracker's own
+stop detection from real GPS fixes (`YYYY-MM-DDTHHMMSS UTC` stamps, "stop or standstill",
+"arrived at anchorage"). The tracker has not run since, and every block after that is
+derived — from the same plotter track, phone and photographs it might be used to date. So
+read the block's italic note before using one of its times, and never feed one back in as
+an independent measurement. There are two kinds:
 
-Each one therefore carries an italic provenance line naming which it is, and there are two
-kinds:
+* **generated** — the note names `boattracker.nfl.time_and_positions` (or, before
+  2026-11-08, `journey/archive/time_and_positions.py`). Built and rebuilt as described in
+  the next section. Times are minutes, with `+/-` or `A .. B` where the data cannot narrow
+  them down.
+* **hand-maintained** — any other note. In `diary-2026.md`: 07-26, 08-06 (the Kaliakra
+  passage), 08-07 (matched against the phone; seconds are meaningful), and 09-01, 09-02 (the
+  phone track, filled in afterwards). In `diary-202401.md`: 2025-09-06 (the Port Palace
+  arrival is the owner's recollection) and 2025-09-15 (the haul-out). Older hand-pinned
+  blocks of 07-29 .. 08-05 were times "approximate to within the half hour" with padded
+  seconds; those days are generated now. `journey/archive/export_aug2026.py` holds the
+  derivation of the August 2026 ones.
 
-* **matched against the phone** — 07-26, 08-06 (the Kaliakra passage), 08-07, 08-09, 08-10,
-  08-11, 08-12. Seconds are meaningful; the positions are the plotter's.
-* **pinned from the diary and the engine log** — 07-29 .. 08-05 and the 08-06 morning leg.
-  The phone was not recording. **The times are approximate to within the half hour and their
-  seconds are padding**; the positions are still the plotter's and are good. The round
-  numbers (`T134500`, `T090000`) are the tell.
+### Building the `### Time and positions` sections
 
-So: read the italic line before using a 2026 timestamp for anything, and never feed one back
-in as if it were an independent measurement — it is derived from the same plotter track it
-would be used to date. `historic/export_aug2026.py` holds the derivation.
+`python -m boattracker.nfl.time_and_positions DIARY FROM TO [--write]` — module docstring for
+the method in full. Without `--write` it prints a draft: every passage day's section, `no
+passage found` days, and at the end the journey's passages on days with no passage heading.
+**Always run the draft first** and read the diff of a `--write` into a copy before writing
+the diary itself.
+
+**Inputs, and how each gets fresh:**
+
+| Input | Where | Refreshed by |
+|---|---|---|
+| the diary's passage headings, `## Weekday YYYY-MM-DD - A - B` | `DIARY` | the owner; a day without ` - ` gets no section |
+| the journey snapshot | `<journey>/journey-snapshot.json` | `boattracker.nfl.snapshot` |
+| the phone tracks | `<data>/../phone/*.kml` and `archive/*.kml` | `boattracker.nfl.import_phone_export` |
+| photograph index and the owner's corrections | `<photos>/exif-index.json`, `manual-locations.json` | `boattracker.nfl.exif_index`, `photo_survey` |
+| place names, and the owner's verdicts on non-places | `<journey>/PLACES.md` | by hand, see below |
+
+**What it does**, in order. Both the journey and the phone are cut into stops and legs; a
+stop counts only where a **journey fix** lies within 500 m (the latest fix before a long
+stay counts too) and is reported at the fix's position — the fixes are the owner's
+consolidated record of where the boat lay, while the phone records a person and walks
+ashore. Each day takes the phone's legs when the phone ran all day with narrow windows,
+otherwise the journey's, re-timed leg by leg and end by end wherever the phone saw the
+same move. The diary day is the local day at the boat's position (`tzfpy`, the `diary`
+extra); every time written is UTC.
+
+**PLACES.md reserved names** are the owner's verdicts, one spot at a time: `at sea` folds a
+short stop there into the passage (slow sailing; a leg-split fix mid-passage), and a longer
+one stays labelled `at sea`; `ashore (not the boat)` drops track points within 300 m. An
+unnamed stop prints `(XXX)` — ask the owner, and add the name, `at sea` or `ashore` to
+PLACES.md, then rerun. Expect each answer to expose the next point over until a land/sea
+check exists (`TODO.md`).
+
+**Ranges used so far:** `diary-2026.md 2026-01-01 2026-12-31` and `diary-202401.md
+2025-02-01 2025-12-31`. Before 2025-02 the blocks are the tracker's own; a range reaching
+into 2024 would add sections to days the tracker missed.
+
+**Rerunning is idempotent**: the same inputs give the same diary. Only sections carrying the
+marker, on days in FROM..TO, are replaced; hand-maintained ones and everything outside the
+range are left alone. A day that no longer yields a passage - typically because its leg
+now belongs to the day before - loses its section with no replacement, and `--write`
+names each such day on stderr. A hand edit inside a generated section goes the same way,
+so make it in PLACES.md instead. After
+a rerun, the 2024 tracker-era blocks still carry `(XXX)` where PLACES.md has gained names;
+those are substituted by hand (a one-off, 2026-11-08).
 
 **Looking for more of the raw feed.** `find-tracker-logs.sh` searches a disk for it by the
 tracker's own wire format — `BR00` + `YYMMDD` + the A/V flag — so it finds a log whatever it

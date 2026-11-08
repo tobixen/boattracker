@@ -108,7 +108,7 @@ such in `config.example.toml`.
 
 **Still open, and the honest remainder of the original three bullets:**
 
-* **`~/solveig` now depends on the `boattracker` package.** `journey/historic/` imports
+* **`~/solveig` now depends on the `boattracker` package.** `journey/archive/` imports
   `boattracker.nfl`, and `journey/tests/` needs it installed. That is tractable — it is a
   real installable package now rather than a sibling directory — but it is a dependency
   that did not exist before, and `journey/README.md` says so.
@@ -253,7 +253,7 @@ directory are another agent's job** as of 2026-08-14.~~ **Both fixed 2026-08-15*
 "Why `test_parser.py` is slow" below. `test_raymarine.gpx.bak` was byte-identical to the
 tracked `test_raymarine.gpx` and is deleted; `SplitGPX.pl` and `export_something.py` were
 reviewed and **deleted 2026-08-15** — the Perl was superseded by the `<trkseg>` regex split
-used in `historic/export_chain.py` and friends, and the Python was a throwaway `find_gap()`
+used in `journey/archive/export_chain.py` and friends, and the Python was a throwaway `find_gap()`
 driver whose parameters now live in `RAYMARINE-GPX.md` under "How a crop was actually
 driven". The directory is clean of untracked files.
 
@@ -377,7 +377,7 @@ driven". The directory is clean of untracked files.
   `Track 4` s95 slice dated nineteen days wrong would pass clean. This is a new axis, not a
   replacement for the backtrack reports.
 
-  It would be `historic/find_land_crossings.py`, tests first. **Two calls for the owner:**
+  It would be `journey/archive/find_land_crossings.py`, tests first. **Two calls for the owner:**
   whether it is worth building at all, and GSHHG against OSM polygons — 130 MB and coarse,
   or a gigabyte and metre-accurate.
 
@@ -435,6 +435,10 @@ been consumed straight from `~/Downloads`.
 
 ## Smaller items
 
+* **`manual-locations.json` cannot correct a photograph's time**, only its position.
+  A crew member's video from 2025-07-09 has UTC stored as local time; only a note
+  could be added. An `offset` or `utc` field that `exif_index.apply_manual` honours would
+  let the owner fix such files the same way positions are fixed.
 * **`time_and_positions`: the departure window ignores the 7 kn cap.** When the shortest
   possible passage is capped by speed, `render()` still prints the whole departure window,
   so departure and duration disagree - e.g. departed 22:30 +/- 2 h, "moved for 3:17",
@@ -444,9 +448,22 @@ been consumed straight from `~/Downloads`.
   "stop" under 30 minutes is slow sailing to be folded into the passage; a stop more than
   1 nm from land is "at sea". Until then the owner's calls are entered one by one in
   PLACES.md as `at sea` / `ashore (not the boat)`, and each one tends to expose the next
-  point over. The OSM land polygons (~900 MB) were judged too heavy; look for something
-  lighter first - the owner's suggestion is the colour of the OSM map tile under the
-  point, blue or green.
+  point over. The full OSM land polygons (hundreds of MB) were judged too heavy for now.
+  A human tells land from sea by the colour of the map tile under the point; the
+  automatic way to try first is an OSM lookup by coordinate - a Nominatim reverse lookup
+  returns no address (or a water feature) at sea, and an Overpass `is_in` query lists the
+  land areas, or the `natural=water` area, a point lies in. The land-crossing check
+  further down ("GSHHG against OSM polygons") needs the same answer; build it once for
+  both.
+* **`time_and_positions` test coverage is thin where the code is most intricate**:
+  `Journey.points` (photographs snapped to vertices or onto segments, the interpolation),
+  `Journey.unheaded`, `clean_phone`, the `dep_hi >= next_d0` cut, and where
+  `replace_sections` inserts a section. It was ported unchanged and checked against the
+  real diaries, but has no unit test of its own.
+* **A third point-to-segment helper.** `time_and_positions._seg_dist` (which also returns
+  the nearest point), `merge_leg._point_to_edge_m` and `find_gaps._seg_dist` do the same
+  flat-earth projection; one belongs in `boattracker.geo`. The module also writes
+  `hav(...)/NM` where `geo.hav_nm` exists.
 * **`timestamp_segments` needs a `--per-day` mode.** `main()` matches each segment against
   the whole phone export; revisits to the same anchorages (G G Yacht Club, Chaika, Tortuga
   in autumn 2026) interleave, Kendall's tau fails, and 33 of 48 segments came out undated or

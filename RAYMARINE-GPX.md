@@ -569,7 +569,7 @@ duplicate check. That mistake produced the whole March 2025 batch: 21 of its 22 
 duplicated geometry an earlier import already held, because the earlier import had
 attached 579 nm of March track to just 17 fixes.
 
-`historic/audit_duplicates.py` does it properly. Two further traps it avoids:
+`journey/archive/audit_duplicates.py` does it properly. Two further traps it avoids:
 
 * measure **point-to-segment** distance against the existing line, not distance to its
   vertices — those sit about 550 m apart, so a 100 m vertex test undercounts badly;

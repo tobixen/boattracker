@@ -42,6 +42,7 @@ sensibly hold all of them:
 | Email or API, and why | below, "Which write path" |
 | Traps that have already caught someone | below, "Traps" |
 | Where a chapter renders, and how to move it | `NFL-CHAPTERS.md` |
+| How the diary's `### Time and positions` sections are built and rebuilt | `SOURCES.md`, "Building the `### Time and positions` sections" |
 | What was uploaded, and every mistake made doing it | `journey/NFL-EXPORT-LOG.md` | For 2021 read `journey/TRACKS-2021.md` instead of this:
 there is no plotter data for that year, so the method is different. `RAYMARINE-GPX.md` has the file format,
 `journey/PLACES.md` the place coordinates.
