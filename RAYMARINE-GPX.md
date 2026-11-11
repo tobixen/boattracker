@@ -55,73 +55,64 @@ There is also no `<ele>`, no `<wpt>`, and no `<rte>` — tracks only.
 Indentation is one space per nesting level, LF line endings, one `<trkpt>` child
 element per line.
 
-### Sampling interval, and when it can tell you about speed
+### Sampling interval: under way the point count is a clock
 
-The plotter has settings for how often to lay a track point and whether to trigger on
-distance, on time, or both. "Distance and time" was the default for a long time; the
-setting is changed rarely, so it holds across long runs of tracks and the changes show
-up as steps in point spacing. Measured across the corpus in GUID order:
+**Measured 2026-11-11** against the phone track, the only timed source dense enough: every
+plotter point was matched to the nearest phone fix within 15 m, and the phone's time
+difference across 20 consecutive points gives seconds per point. Thousands of windows per
+track, interquartile range ±0.1–0.2 s:
 
-| Tracks | Median gap | Gaps under 1 m | Reading |
+| Tracks | Period | Under way | At anchor |
 |---|---|---|---|
-| ToSantorini2024, Track 7 | 461–473 m | 3 % | very coarse — one point every few hundred metres |
-| Track 8 .. 19 | 1.4–4.7 m | 1–43 % | frequency increased sharply at Track 8 (Feb 2025) |
-| Track 20 .. 26P | 6.9–12.4 m | 0–36 % | wound back down again from Track 20 (2025-03-09) |
-| Track 46 .. 54 | 4.9–12.5 m | 0–8 % | as above |
-| Track 55 .. 60 | 0.4–8.8 m | 15–57 % | frequent time sampling |
+| ToSantorini2024, Track 7 | up to 2025-02-18 | ~210 s per point | — |
+| Track 8 .. 19 | 2025-02-21 .. 03-09 | **2.0 s per point** | irregular, ~2.5–4 s and up |
+| Track 20 .. 67W | 2025-03-09 .. 2026-08 | **5.0 s per point** | irregular, from ~5 s to several minutes |
 
-**The useful diagnostic is the share of gaps under a metre, not the median.** Under
-pure distance triggering a stationary boat lays down no points at all, so near-zero
-gaps cannot occur; a large share of them proves time triggering was active and caught
-the boat sitting still. Where that share is high — Track 55 at 57 %, Track 57 at 50 %,
-Track 23 at 36 % — dense points really do mean slow going, and speed can be read off
-the spacing. Where it is near zero — Tracks 24, 25, 48, 49, 53, 54 — spacing is
-constant regardless of speed and says nothing.
+The owner's setting is "every 5 seconds", and that is what the plotter does while moving.
+At anchor it lays far fewer points and at no fixed rate. The most likely reading is a
+time trigger that also needs some minimum movement. A boat swinging on its anchor
+sometimes moves that far in one step and sometimes doesn't. Stops were never measured
+against a known duration, so treat that reading as a hypothesis.
 
-Getting this backwards caused a real error. 952 points covering 1.71 nm at the start
-of `Track 10 s0` were read as a passage, when Track 10 has only 1.8 % of gaps under a
-metre — so those points are a boat swinging at anchor for a day and a half at Kara
-Ada, laying down points on distance as it swung. Reading them as movement pushed a
-departure a day early and misdated two uploads. See `journey/DIARY-DISCREPANCIES.md`.
+**What follows:**
 
-### The measured intervals, and what they let you deduce
+* **Under way, point index × the step is elapsed time.** Between two trusted fixes on a
+  continuous passage, point *n* lies *n* × 5 s after the first (2 s for Tracks 8–19). This
+  is far better than interpolating along distance, and it shows speed too: point spacing ÷
+  5 s is speed over ground.
+* **It breaks at stops and at recording gaps.** A stop puts too few points in to count, and
+  a segment break or a dropped stretch (see "Recording gaps" below) loses time outright. So
+  count only across a stretch known to be continuous movement, and re-anchor at every stop
+  and at every gap.
+* **A stop shows up as spacing, not as a cluster of points.** Where consecutive gaps fall
+  well below 5 s × the passage speed, the boat slowed or stopped. Its duration has to come
+  from the timed points either side, not from counting the points inside it.
 
-Estimated from stationary stretches whose duration is bracketed by trusted fixes:
+Superseded: until 2026-11-11 this file claimed the reverse, that under way "the distance
+trigger fires, and point count measures distance travelled, not time elapsed". It derived
+a ~103 s and ~48 s time step from stationary stretches and a "distance trigger wins above
+0.5 kn" table. Stationary stretches are exactly where the plotter does *not* keep time, so
+those steps measured the anchor swing. `boattracker.nfl.time_and_positions` was built on
+that claim (`TODO.md`).
 
-| Config | Time step | Measured from |
+The share of sub-metre gaps per track, in GUID order, is still a fair guide to how much of a
+track is spent stopped or swinging:
+
+| Tracks | Median gap | Gaps under 1 m |
 |---|---|---|
-| Tracks 8–19 (from 2025-02) | ~103 s | Track 8 s3 + Track 9 s0, 1819 points over 52.1 h at Çeşme, 37 % of gaps under 1 m |
-| Tracks 55–60 (Sept 2025 on) | ~48 s | Track 55 s2, 5149 points over 69.1 h at Varna Lake, 83 % under 1 m — the firmer of the two |
+| ToSantorini2024, Track 7 | 461–473 m | 3 % |
+| Track 8 .. 19 | 1.4–4.7 m | 1–43 % |
+| Track 20 .. 26P | 6.9–12.4 m | 0–36 % |
+| Track 46 .. 54 | 4.9–12.5 m | 0–8 % |
+| Track 55 .. 60 | 0.4–8.8 m | 15–57 % |
 
-The Feb figure is closer to an upper bound, since only 37 % of its gaps are time
-triggered and the rest inflate the average.
+At 5 s per point, a 12 m median gap is 4.7 kn. The spacing is the speed.
 
-Combining the time step with the distance step gives the speed at which the distance
-trigger takes over:
-
-| Config | Distance step | Time step | Distance trigger wins above |
-|---|---|---|---|
-| Tracks 8–19 | ~4 m | ~103 s | 0.08 kn |
-| Tracks 20–54 | ~12 m | ~103 s | 0.23 kn |
-| Tracks 55–60 | ~12 m | ~48 s | 0.49 kn |
-
-So under way — anything over about half a knot — the distance trigger is what fires,
-and **point count measures distance travelled, not time elapsed**. Speed cannot be
-read off point density while sailing, in any of the configs.
-
-What it does give you is the reverse, and it is worth having: a run of consecutive
-near-zero gaps must be time triggered, so **counting those points and multiplying by
-the time step gives the duration of that stop**. That is the missing tool for
-allocating time inside a segment that mixes a stop with a passage — the case that
-caused the Kara Ada error. It works on tracks with a high near-zero share (55, 57,
-23, 58, 60) and not on those without (10, 11, 24, 25, 48, 49, 53, 54), where a
-stationary boat that is swinging still covers distance and triggers on distance.
-
-The wider lesson for dating: **cumulative distance is not a proxy for elapsed time**
-across any span that contains a stop. Interpolating times along distance between two
-reference fixes silently compresses the stop and stretches the passage. It is only safe when
-the span is known to be continuous movement, which is why reference fixes either side of a
-single passage give good times, and reference fixes a day apart do not.
+The Kara Ada error stands as recorded: 952 points covering 1.71 nm at the start of
+`Track 10 s0` are a boat swinging at anchor for a day and a half, not a passage. Reading
+them as movement pushed a departure a day early and misdated two uploads (see
+`journey/DIARY-DISCREPANCIES.md`). The lesson is the same either way: before counting
+or measuring points, check that the stretch really is one continuous passage.
 
 ### Gotchas for parsers
 
@@ -304,16 +295,15 @@ Two things about running the test:
   A slowest-window search over the same leg returned six candidates, all of them out at sea,
   and missed this berth entirely.
 
-**The duration does not follow, and trying to take it cost an hour here.** "Sampling interval"
-above gives the rule — near-zero points × the time step — but the step is only *measured* for
-Tracks 8–19 (~103 s) and 55–60 (~48 s). Applying 48 s to this cluster gives 504 × 48 s =
-**6.7 hours**, which the day flatly cannot fit: the morning ran at a measured 2.41 kn and the
-boat was back at Chaika before dark. So the step for Tracks 63–67W is much shorter and has
-never been measured. Inverting the owner's own half hour gives **≈3.6 s per point** — a
-hypothesis worth testing the first time a stay of known duration turns up in these tracks.
+**Count the passage, not the stop.** The points inside the cluster do not time it. At anchor
+or alongside, the plotter lays points at no fixed rate ("Sampling interval" above): 504
+points here would be 42 minutes at 5 s, where the owner remembers about half an hour. The
+passages either side do keep time. Counting points × 5 s from the last trusted fix to the
+start of the cluster, and from its end to the next trusted fix, brackets the stop. Its
+duration is whatever is left over. (Before 2026-11-11 this paragraph guessed ~3.6 s per
+point for these tracks, from that same half hour.)
 
-The share of sub-metre gaps for the 2026 tracks, which is what decides whether the test can
-work at all:
+The share of sub-metre gaps for the 2026 tracks:
 
 | Track | Median gap | Gaps under 1 m |
 |---|---|---|
@@ -325,9 +315,10 @@ work at all:
 | Track 66 | 11.1 m | 1.7 % |
 | Track 67W | 10.0 m | 20.7 % |
 
-**The setting moves around inside a single fortnight** — Track 65 at 0.1 % against Track 67W
-at 20.7 %, eight days apart — so measure the share for the track in hand rather than assuming
-a season's worth. On Track 65 and Track 66 a stop would leave no trace at all.
+The setting did not change between these tracks; under way all of them measure 5.0 s per
+point. The share reflects how long each track spent stopped, and how far the boat swung
+there. A track with almost none, like Track 65 or 66, is mostly passage. Even so, a stop
+on it can leave few or no sub-metre gaps, so look for a stop in the spacing as well.
 
 ## Injecting timestamps for noforeignland import
 

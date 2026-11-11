@@ -433,6 +433,28 @@ been consumed straight from `~/Downloads`.
   numbers move. `dedupe()` keys on the points themselves, so anything already present will
   collapse and only genuinely new segments will show.
 
+## Time Raymarine passages by point count, not by distance
+
+**Found 2026-11-11** (RAYMARINE-GPX.md, "Sampling interval"): under way the plotter lays a
+point every **5.0 s** (Tracks 20 .. 67W, from 2025-03-09) or **2.0 s** (Tracks 8 .. 19).
+Everything below was built on the opposite belief, that point count measures distance, so
+each one spreads time by distance where it could count points:
+
+* `nfl/time_and_positions.py` - module docstring (lines 17-18), the comment at ~188, and the
+  vertex interpolation after it. Between two timed fixes on one continuous passage, point
+  *n* is *n* x step after the first, which gives minute-exact departures and arrivals where
+  the diary now has "+/-" and "A .. B".
+* `nfl/timestamp_segments.py:244` - "Cumulative distance, never point index".
+* `nfl/merge_leg.py` - spliced slices "spread by distance" (lines 34, 117, 382, and
+  `tests/test_merge_leg.py:66`).
+
+The catch is stops and recording gaps: the plotter does not keep time at anchor, and a
+segment break loses time. So count only within a stretch of continuous movement, and anchor
+each stretch to timed fixes at both ends, or to one fix plus the step. Write tests first,
+then run the draft over `diary-2026.md` and `diary-202401.md` (2025-03-09 onwards) and have
+the owner review the diff on screen before any `--write`. Measuring script and per-track
+figures: rerun the phone match described in RAYMARINE-GPX.md.
+
 ## Smaller items
 
 * **`manual-locations.json` cannot correct a photograph's time**, only its position.
