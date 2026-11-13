@@ -477,6 +477,24 @@ figures: rerun the phone match described in RAYMARINE-GPX.md.
   land areas, or the `natural=water` area, a point lies in. The land-crossing check
   further down ("GSHHG against OSM polygons") needs the same answer; build it once for
   both.
+* **`time_and_positions`: the dinghy and swing guards should apply to the phone only, and
+  a short phone move needs the owner's verdict.** The owner, 2026-11-13: plotter and tracker
+  data always follow the boat and are never a dinghy trip; only the phone can be. Today
+  `passages()` drops every phone move under half a mile as "a dinghy trip as often as not",
+  and `stops()` merges stops under 600 m apart for every source. The owner's largest swing
+  diameter is under 200 m, so 600 m is far too wide: the Nessebar Sea Station and the south
+  anchorage, 540 m apart, merged, which lost the 2026-11-06 and 11-08 moves and named the
+  11-09 departure wrongly (those days are hand-written now). Wanted:
+  * the merge distance down to ~250 m. Tried 2026-11-13 against the 2025 and 2026 drafts:
+    positions move 20-80 m to another fix in the same bay on five July 2026 days and at
+    Foça 2025-02-21; the 2025-03-12 Fenerbahçe arrival moves 650 m to another fix (which is
+    right is unchecked); 2026-08-12 gains a phone-exact departure; 2026-11-03 gains a vague
+    anchorage -> Sea Station leg;
+  * no dinghy filter on journey (plotter/tracker) legs;
+  * a phone-only move under half a mile printed as a question for the owner, the way an
+    unnamed stop prints `(XXX)`, and the verdict - boat or dinghy - recorded somewhere a
+    rerun reads (by time, since a place does not decide it), then honoured;
+  * land trips discounted by the land/sea check above.
 * **`time_and_positions` test coverage is thin where the code is most intricate**:
   `Journey.points` (photographs snapped to vertices or onto segments, the interpolation),
   `Journey.unheaded`, `clean_phone`, the `dep_hi >= next_d0` cut, and where
