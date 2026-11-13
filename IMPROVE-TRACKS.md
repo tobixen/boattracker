@@ -322,7 +322,7 @@ Two limits to know:
 Ranked; use the best available and say in the upload description which was used. `SOURCES.md`
 has the full inventory with each source's weakness.
 
-1. **Engine log** — explicit UTC with hours and total miles. Sparse but decisive.
+1. **Engine log** — hours and total miles with a clock time (UTC when it says so, else the laptop's zone). Sparse but decisive.
 2. **Journey vertex timestamps** — `export_partial_runs.py` brackets a missing run by the
    journey's own clock either side of it. Works from 2024 on. **Fails for 2023**, where most
    vertices carry epoch 0.
