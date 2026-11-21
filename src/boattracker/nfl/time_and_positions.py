@@ -57,6 +57,7 @@ from typing import NamedTuple
 from boattracker import config
 from boattracker.geo import NM, hav
 from boattracker.nfl import exif_index, import_phone_export, omaps_export
+from boattracker.places import AT_SEA, LatLon, read_places, zone_at
 
 UTC = D.UTC
 MARKER = 'boattracker.nfl.time_and_positions'
@@ -65,7 +66,6 @@ MARKER = 'boattracker.nfl.time_and_positions'
 MARKERS = (MARKER, 'journey/archive/time_and_positions.py')
 SOURCE_NAMES = {'phone': 'the Organic Maps phone track', 'nfl': 'the noforeignland journey',
                 'photo': 'photograph geotags'}
-LatLon = tuple[float, float]
 Sections = dict[str, tuple[list[str], list[str]]]  # day -> (sources, lines)
 MAX_KTS = 7  # nothing here sails faster than this on average; it bounds an untimed passage
 DAY_RE = re.compile(r'## \w+ (\d{4}-\d\d-\d\d)')
@@ -316,44 +316,9 @@ def photo_points(photos: str) -> list[Pt]:
     return out
 
 
-## Reserved names in PLACES.md for spots that are not places: the owner's verdict that a
-## "stop" there was slow sailing, or that a position there was the phone carried ashore.
-AT_SEA = 'at sea'
-ASHORE = 'ashore (not the boat)'
-
-
-def read_places(path: str) -> tuple[list[tuple[str, float, float]], list[LatLon], list[LatLon]]:
-    """(places, at_sea, ashore) from a PLACES.md table: named places as (name, lat, lon),
-    and the positions of the two reserved names as (lat, lon)."""
-    places, at_sea, ashore = [], [], []
-    with open(path) as f:
-        for line in f:
-            m = re.match(r'\|\s*([^|]+?)\s*\|\s*(-?\d+\.\d+)\s*\|\s*(-?\d+\.\d+)\s*\|', line)
-            if not m:
-                continue
-            name, pos = m.group(1), (float(m.group(2)), float(m.group(3)))
-            if name == AT_SEA:
-                at_sea.append(pos)
-            elif name == ASHORE:
-                ashore.append(pos)
-            else:
-                places.append((name, *pos))
-    return places, at_sea, ashore
-
-
 def not_ashore(pts: list[Pt], ashore: Iterable[LatLon], radius: float = 300) -> list[Pt]:
     """Without the points at a spot the owner placed on land: the phone without the boat."""
     return [p for p in pts if not any(hav(p[1:3], a) < radius for a in ashore)]
-
-
-def zone_at(lat: float, lon: float) -> str | None:
-    """The zone at a position, or None offshore, where only the nautical zones exist."""
-    try:
-        from tzfpy import get_tz
-    except ImportError as e:
-        raise SystemExit('the diary day needs tzfpy: pip install "boattracker[diary]"') from e
-    z = get_tz(lon, lat)
-    return None if not z or z.startswith('Etc/') else z
 
 
 def day_zone(pts: list[Pt], t: float) -> str:
