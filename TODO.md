@@ -455,8 +455,37 @@ then run the draft over `diary-2026.md` and `diary-202401.md` (2025-03-09 onward
 the owner review the diff on screen before any `--write`. Measuring script and per-track
 figures: rerun the phone match described in RAYMARINE-GPX.md.
 
+## Find stops hidden inside a fix's line
+
+**Found 2026-11-21.** The 2026-08-10 line, Kaliakra -> Chaika, carried a 44-minute stop at the
+Varna Sea Station border police berth with no fix of its own, so `time_and_positions` could not
+see it, and gave the heading's three names to two legs, one place off. The owner's rule: a
+stop of half an hour or more is a leg end and gets a fix, and a line with one inside is a bug
+in whatever built it (here the `pin` branch of the August 2026 exporter, which spreads one
+time window over two segments and the stop between them).
+
+Wanted: a check over every line on the journey, against the raw plotter segments behind it,
+that reports a stationary stretch of 30 min or more that is not at either end. Under way a
+point is 5 s (`RAYMARINE-GPX.md`, "Sampling interval"), so the stretch shows as many points
+inside ~150 m (580 of them at the berth) bracketed by a moving count on both sides. A stretch
+that time cannot measure, because the plotter keeps no time at anchor, is still timed by the
+count to the next timed point. Run it as part of the exporters' verification, next to
+`find_backtracks --connectors --windows`.
+
 ## Smaller items
 
+* **`time_and_positions`: a name is taken from PLACES.md within 1000 m.** In Lake Varna that
+  named an afloat stop on 2025-05-11 "Tortuga land-stay position", the spot ashore 620 m
+  away, until the owner named the spot itself. 1000 m is wider than a bay; something like
+  300 m, with the heading's name or `XXX` beyond it, would ask instead of guessing.
+* **`time_and_positions`: "one move, one leg" across days only holds for days it generates.**
+  Since 2026-11-21 a leg between the same two fixes as one an earlier passage day already
+  reported is dropped from the later day (on 2026-08-10 the Constanta -> Kaliakra leg appeared
+  on both days, with an impossible departure clamped into the second). The earlier day must
+  be one the run computes: a range whose FROM is the later day does not see it, and a
+  hand-maintained day is skipped before its legs are computed, so either can still let the
+  leg be reported twice. The remedy for both is to compute legs, without writing them, for
+  the passage days just before FROM and for the hand-maintained days.
 * **`manual-locations.json` cannot correct a photograph's time**, only its position.
   A crew member's video from 2025-07-09 has UTC stored as local time; only a note
   could be added. An `offset` or `utc` field that `exif_index.apply_manual` honours would

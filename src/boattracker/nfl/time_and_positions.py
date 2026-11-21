@@ -100,6 +100,8 @@ class Leg:
     tmin: float = 0.0  # shortest and longest the move can have taken, seconds
     tmax: float = 0.0
     srcs: set[str] = field(default_factory=set)  # every source among its points
+    dep_fix: float | None = None  # times of the journey fixes the departure and the
+    arr_fix: float | None = None  # arrival are anchored on: together, which move this is
 
     @property
     def width(self) -> float:
@@ -488,6 +490,7 @@ def passages(pts: list[Pt], d0: float, d1: float, next_d0: float, at_sea: Iterab
             continue
         k += 1
     pos = [None] * len(st)
+    fix_t: list[float | None] = [None] * len(st)
     if fixes is not None:
         fixes = sorted(fixes, key=lambda f: f[2])
         times = [f[2] for f in fixes]
@@ -503,15 +506,15 @@ def passages(pts: list[Pt], d0: float, d1: float, next_d0: float, at_sea: Iterab
             near = [(hav(pts[i][1:3], f), f) for f in cands for i in (s[0], s[1])]
             best = min(near, default=(9e9, None), key=lambda x: x[0])
             if best[0] < anchor_m:
-                kept.append((s, (best[1][0], best[1][1])))
+                kept.append((s, (best[1][0], best[1][1]), best[1][2]))
         # two stops inside one anchorage can both lie within reach of its fix: one stop
         merged: list = []
-        for s_, p_ in kept:
+        for s_, p_, t_ in kept:
             if merged and merged[-1][1] == p_:
-                merged[-1] = ([merged[-1][0][0], s_[1], merged[-1][0][2] or s_[2]], p_)
+                merged[-1] = ([merged[-1][0][0], s_[1], merged[-1][0][2] or s_[2]], p_, merged[-1][2])
             else:
-                merged.append((s_, p_))
-        st, pos = [k[0] for k in merged], [k[1] for k in merged]
+                merged.append((s_, p_, t_))
+        st, pos, fix_t = [k[0] for k in merged], [k[1] for k in merged], [k[2] for k in merged]
     out = []
     for k in range(1, len(st)):
         pa, pb = st[k-1][1], st[k][0]
@@ -545,7 +548,8 @@ def passages(pts: list[Pt], d0: float, d1: float, next_d0: float, at_sea: Iterab
         a, b = pos[k-1] or (pts[pa].lat, pts[pa].lon), pos[k] or (pts[pb].lat, pts[pb].lon)
         # the leg runs from fix to fix, so the way to and from the track counts as sailed
         dist += hav(a, pts[pa][1:3]) + hav(pts[pb][1:3], b)
-        leg = Leg(dep_lo, dep_hi, arr_lo, arr_hi, a, b, src, dist, tmin, max(tmax, tmin))
+        leg = Leg(dep_lo, dep_hi, arr_lo, arr_hi, a, b, src, dist, tmin, max(tmax, tmin),
+                  dep_fix=fix_t[k-1], arr_fix=fix_t[k])
         leg.srcs = {p.src for p in pts[pa:pb+1]}
         out.append(leg)
     return out
@@ -616,7 +620,9 @@ def retime(legs: list[Leg], phone: list[Leg], match_m: float = 1000,
         same = [p for p in phone if hav(p.a, g.a) <= match_m and hav(p.b, g.b) <= match_m
                 and p.dep_lo - g.arr_hi < same_move and g.dep_lo - p.arr_hi < same_move
                 and p.width < g.width]
-        out.append(min(same, key=lambda p: p.width) if same else g)
+        # the phone has the times; which fixes the move runs between stays the journey's
+        out.append(replace(min(same, key=lambda p: p.width), dep_fix=g.dep_fix, arr_fix=g.arr_fix)
+                   if same else g)
     return out
 
 
@@ -677,6 +683,16 @@ def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_path
                    (re.match(r'## \w+ (\d{4}-\d\d-\d\d) - .* - ', h) for h in heads)
                    if m and lo <= window(m.group(1))[0] <= hi + 86400*30)
     sections, draft = {}, []
+    # a move from one fix to the next is one leg: the first passage day to report it keeps it
+    reported: set[tuple[float, float]] = set()
+
+    def _key(g):
+        return (g.dep_fix, g.arr_fix) if g.dep_fix is not None and g.arr_fix is not None else None
+
+    def unreported(gs):
+        # a journey leg whose departure window reaches back into an earlier passage day is
+        # clamped into this one too; when that day already had it, it is not this day's
+        return [g for g in gs if _key(g) is None or _key(g) not in reported]
     for h in heads:
         m = re.match(r'## \w+ (\d{4}-\d\d-\d\d) - (.*)', h)
         if not m or ' - ' not in m.group(2) or not (frm <= m.group(1) <= to) or m.group(1) in done:
@@ -688,8 +704,8 @@ def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_path
         bt = [p for p in boat if w0 <= p.t <= w1]
         # the phone is dense where it ran; it is useless where it was off or ashore
         ph_day = [p for p in ph if d0 <= p.t <= d1]
-        legs = passages(bt, d0, d1, next_d0, at_sea, fixes=fixes)
-        ph_legs = passages(ph, d0, d1, next_d0, at_sea, fixes=fixes) if len(ph_day) >= 100 else []
+        legs = unreported(passages(bt, d0, d1, next_d0, at_sea, fixes=fixes))
+        ph_legs = unreported(passages(ph, d0, d1, next_d0, at_sea, fixes=fixes)) if len(ph_day) >= 100 else []
         if ph_legs and not any(_walking(g) for g in ph_legs) and (
                 _worst(ph_legs) <= 2*3600 or (_worst(ph_legs) < _worst(legs) and len(ph_legs) >= len(legs))):
             # the phone's worth is its precision; wide windows mean it was off for a passage,
@@ -698,6 +714,7 @@ def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_path
         else:
             # but a phone that ran for one move of the day still times that move
             legs = retime_ends(retime(legs, [g for g in ph_legs if not _walking(g)]), ph)
+        reported.update(_key(g) for g in legs if _key(g) is not None)
         if not legs:
             draft.append(f"\n{h}\n\n<!-- no passage found in the track data -->")
             continue

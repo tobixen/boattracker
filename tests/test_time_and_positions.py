@@ -434,3 +434,86 @@ def test_unheaded_skips_a_line_with_no_times(tmp_path):
     p = tmp_path / "snap.json"
     p.write_text(json.dumps(snap))
     assert tp.Journey(str(p)).unheaded("", "2024-01-01", "2024-12-31") == []
+
+
+def overnight_then_onwards():
+    """A -> B departing day 1, arriving after local midnight; B -> C on day 2.
+
+    2026-08-09/10, Constanta - Kaliakra - Chaika: the phone timed the first move on day 1
+    and was off for the arrival; the journey's line for it reaches into day 2, where the
+    phone was off again before the arrival, so day 2 is built from the journey."""
+    a, b, c = (43.0, 28.0), (43.5, 28.0), (43.55, 28.1)
+    short = (a[0] + (b[0] - a[0]) * 0.8, a[1])  # where the phone went off on day 1
+    c2 = ((b[0] + c[0]) / 2, (b[1] + c[1]) / 2)  # and on day 2, short of c again
+    d, e = "2024-11-08T", "2024-11-09T"
+    at_a = [tp.Pt(ts("2024-11-06T22:00"), *a, "nfl", ts("2024-11-06T22:00"), ts("2024-11-06T22:00"), True)]
+    line_ab = [p._replace(lo=ts("2024-11-06T22:00"), hi=ts(d + "23:30"))
+               for p in walk("2024-11-06T22:30", d + "10:00", a, a, "nfl", 1800)
+               + walk(d + "10:00", d + "23:00", a, b, "nfl", 1800)]
+    at_b = [tp.Pt(ts(d + "23:30"), *b, "nfl", ts(d + "23:30"), ts(d + "23:30"), True)]
+    line_bc = [p._replace(lo=ts(d + "23:30"), hi=ts(e + "15:00"))
+               for p in walk(d + "23:45", e + "06:00", b, b, "nfl", 1800)
+               + walk(e + "06:00", e + "14:30", b, c, "nfl", 1800)]
+    at_c = [tp.Pt(ts(e + "15:00"), *c, "nfl", ts(e + "15:00"), ts(e + "15:00"), True)]
+    boat = at_a + line_ab + at_b + line_bc + at_c
+    phone = (walk(d + "08:00", d + "10:00", a, a) + walk(d + "10:00", d + "19:00", a, short)
+             + walk(e + "00:30", e + "06:00", b, b) + walk(e + "06:00", e + "07:00", b, c2))
+    fixes = [(*a, ts("2024-11-06T22:00")), (*b, ts(d + "23:30")), (*c, ts(e + "15:00"))]
+    return boat, phone, fixes
+
+
+def test_a_leg_is_reported_on_one_day_only(tmp_path, monkeypatch):
+    boat, phone, fixes = overnight_then_onwards()
+    monkeypatch.setattr(tp, "photo_points", lambda photos: [])
+    monkeypatch.setattr(tp, "phone_points", lambda paths: phone)
+
+    class J:
+        anchored: set = set()
+
+        def points(self, anchors):
+            return boat
+
+        def near(self, lat, lon):
+            return True
+
+        def fixes(self):
+            return fixes
+    diary = "## Friday 2024-11-08 - A - B\n\n## Saturday 2024-11-09 - B - C\n"
+    sections, _ = tp.generate(diary, "2024-11-08", "2024-11-09", journey=J(), phone_paths=[],
+                              photos="", places_path=str(tmp_path / "none.md"))
+    assert len(sections["2024-11-08"][1]) == 3
+    day2 = sections["2024-11-09"][1]
+    assert len(day2) == 3, day2
+    assert "departed from 43.50000,28.00000" in day2[0]
+
+
+def test_a_return_to_the_same_harbour_is_not_a_duplicate(tmp_path, monkeypatch):
+    # A -> X, X -> Y, Y -> X within two days: the return's stop can take the first
+    # visit's fix (nearest by distance), and must still be reported
+    a, x, y = (43.0, 28.0), (43.2, 28.0), (43.2, 28.3)
+    x3 = (43.2004, 28.0)  # the return's own fix, 45 m off; the track lies on the first
+    d1, d2, d3 = "2024-11-07T", "2024-11-08T", "2024-11-09T"
+    boat = (walk(d1 + "06:00", d1 + "08:00", a, a, "nfl", 300) + walk(d1 + "08:00", d1 + "15:00", a, x, "nfl", 300)
+            + walk(d1 + "15:00", d2 + "08:00", x, x, "nfl", 300) + walk(d2 + "08:00", d2 + "14:00", x, y, "nfl", 300)
+            + walk(d2 + "14:00", d3 + "08:00", y, y, "nfl", 300) + walk(d3 + "08:00", d3 + "12:00", y, x, "nfl", 300)
+            + walk(d3 + "12:00", d3 + "20:00", x, x, "nfl", 300))
+    boat = sorted(set(boat))
+    fixes = [(*a, ts(d1 + "06:00")), (*x, ts(d1 + "15:00")), (*y, ts(d2 + "14:00")), (*x3, ts(d3 + "12:00"))]
+    monkeypatch.setattr(tp, "photo_points", lambda photos: [])
+    monkeypatch.setattr(tp, "phone_points", lambda paths: [])
+
+    class J:
+        anchored: set = set()
+
+        def points(self, anchors):
+            return boat
+
+        def near(self, lat, lon):
+            return True
+
+        def fixes(self):
+            return fixes
+    diary = "## Thursday 2024-11-07 - A - X\n\n## Friday 2024-11-08 - X - Y\n\n## Saturday 2024-11-09 - Y - X\n"
+    sections, _ = tp.generate(diary, "2024-11-07", "2024-11-09", journey=J(), phone_paths=[],
+                              photos="", places_path=str(tmp_path / "none.md"))
+    assert sorted(sections) == ["2024-11-07", "2024-11-08", "2024-11-09"]
