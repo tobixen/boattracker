@@ -118,7 +118,12 @@ python_files = ["test_*.py"]
 # (`make dev`) is still the supported way to *use* the tools.
 pythonpath = ["src"]
 # A warning is usually a real problem.  Anything ignored below must say why.
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # With pytest-asyncio blocked in addopts, a loop scope set in PYTEST_ADDOPTS
+    # (the usual fix for the same warning) is an unknown option.
+    "ignore:Unknown config option. asyncio_default_fixture_loop_scope:pytest.PytestConfigWarning",
+]
 # The suite has no async tests.  A system-wide pytest-asyncio (Arch's python-pytest-asyncio)
 # warns at configure time about an unset loop scope, which filterwarnings turns into an
 # INTERNALERROR before a single test runs.  `-p no:asyncio` is harmless where it is absent.
