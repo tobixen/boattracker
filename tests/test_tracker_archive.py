@@ -311,3 +311,31 @@ def test_the_upper_edge_of_the_window_follows_the_offset(tmp_path):
     points, stats = tracker_archive.read_archive(str(tmp_path), hi='2021-07-07', tz_offset=-5)
     assert [p.ts for p in points] == ['2021-07-07T120000', '2021-07-08T030000']
     assert stats['outside range'] == 1
+
+
+def test_without_clock_hours_a_passage_is_one_leg():
+    ## The owner's rule since 2026-08-14: one fix per leg, stop to stop. Eight hours under
+    ## way between two stops is one leg, whatever the clock says.
+    points = still(9 * 60, 60) + sail(10 * 60, 8 * 60, lat0=59.0) + still(18 * 60, 60, lat=59.96)
+    legs = tracker_archive.segments(points, hours=None)
+    assert len(legs) == 1
+    assert legs[0][-1].ts == '2021-07-07T180000'
+
+
+def test_a_leg_runs_over_midnight_in_leg_mode(tmp_path, monkeypatch):
+    ## A night passage, 22:30 .. 02:30 local, between an hour at each end: one leg and one
+    ## file, not one per diary day.
+    fixes = []
+    for minute in range(0, 6 * 60):              # 19:30 .. 01:29 UTC, one fix a minute
+        utc = 19 * 60 + 30 + minute
+        day, hhmm = ('210707', utc) if utc < 24 * 60 else ('210708', utc - 24 * 60)
+        under_way = min(max(minute - 60, 0), 240)
+        lat_min = f'{10 + under_way * 0.12:07.4f}'
+        fixes.append(blob(day, f'{hhmm // 60:02d}{hhmm % 60:02d}00', lat_min, '35.3712'))
+    (tmp_path / 'gpstracker.raw').write_bytes(''.join(fixes).encode())
+    out = tmp_path / 'out'
+    monkeypatch.setattr('sys.argv', ['tracker_archive', '--archive', str(tmp_path),
+                                     '--from', '2021-07-07', '--to', '2021-07-08',
+                                     '--legs', '--write', '--out', str(out)])
+    tracker_archive.main()
+    assert sorted(p.name for p in out.iterdir()) == ['tracker2021-2021-07-07-2230-0230.gpx']

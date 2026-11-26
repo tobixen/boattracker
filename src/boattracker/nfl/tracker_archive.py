@@ -282,14 +282,17 @@ def segments(points, hours=2, radius=50, stop_minutes=30, gap_minutes=30,
              min_leg_minutes=30, min_leg_m=1852, min_leg_kn=0.5):
     """Split a track into the legs that should each become one journey fix.
 
-    The owner's rule: **one fix for each stop, plus one every `hours` clock hours under way.**
-    Since one GPX is one fix timestamped at its **last** point, that is a cut at each of:
+    Since one GPX is one fix timestamped at its **last** point, a cut falls at each of:
 
     * the moment the boat arrives somewhere and stays — the fix that dates the stop;
-    * each clock hour divisible by `hours`, but only once the leg is worth reporting: half an
+    * with `hours` set, each clock hour divisible by it, but only once the leg is worth reporting: half an
       hour and a mile of it, which is the daemon's own `clock_hour_logic`. Without that a boat
       leaving a berth at 11:58 files a two-minute leg;
     * a break in the feed, which must never be spanned — the line across it is interpolation.
+
+    `hours=None` is the owner's rule since 2026-08-14 - **one fix per leg, stop to stop**
+    (`IMPROVE-TRACKS.md`). The clock-hour cut was the rule before it, and is what the
+    2021-06-26 .. 08-22 upload was cut by.
 
     Time at the berth is not a leg. A stop contributes the arrival fix and nothing else, so a
     day that never moved yields nothing rather than a day's worth of anchor jitter.
@@ -332,7 +335,7 @@ def segments(points, hours=2, radius=50, stop_minutes=30, gap_minutes=30,
             close()
             leg = [prev]
         leg.append(point)
-        crossed = ts2dt(point.ts).hour % hours == 0 and ts2dt(prev.ts).hour != ts2dt(point.ts).hour
+        crossed = hours and ts2dt(point.ts).hour % hours == 0 and ts2dt(prev.ts).hour != ts2dt(point.ts).hour
         worth_it = ((ts2dt(point.ts) - ts2dt(leg[0].ts)).total_seconds() >= min_leg_minutes*60
                     and leg[0].distance_to(point) >= min_leg_m)
         if crossed and worth_it:
@@ -441,6 +444,9 @@ def main():
     ap.add_argument('--outbox', help='also write one .eml per leg, ready for sendmail')
     ap.add_argument('--hours', type=int, default=2,
                     help='clock-hour interval for a fix under way (default 2)')
+    ap.add_argument('--legs', action='store_true',
+                    help='one leg stop to stop across the whole range: no clock-hour or '
+                         'midnight cuts (the owner\'s rule since 2026-08-14)')
     ap.add_argument('--out', default=GPXDIR)
     ap.add_argument('--prefix', default='tracker2021')
     ap.add_argument('--write', action='store_true', help='write one GPX per listed day')
@@ -492,28 +498,39 @@ def main():
         print('(dry run - pass --write to save one GPX per day)')
         return
     os.makedirs(a.out, exist_ok=True)
-    written = 0
-    for r in rows:
-        kept = thin(days[r['day']], a.min_dist, a.min_secs)
-        legs = segments(kept, a.hours)
+    if a.legs:
+        ## Stop to stop over the whole range: a night passage is one leg, not two days.
+        legs = segments(thin(points, a.min_dist, a.min_secs), None)
         for leg in legs:
-            # Both ends in the name: two legs of one day can share an end minute - a stop
-            # arrival and the clock hour that follows it - and one silently overwrote the
-            # other when the name carried only the end.
-            start = ts2dt(leg[0].ts) + timedelta(hours=a.tz_offset)
-            end = ts2dt(leg[-1].ts) + timedelta(hours=a.tz_offset)
-            name = (f"{r['day']} tracker feed, {ts2dt(leg[0].ts):%H:%M}-"
-                    f"{ts2dt(leg[-1].ts):%H:%M} UTC")
-            fn = f"{a.prefix}-{r['day']}-{start:%H%M}-{end:%H%M}.gpx"
-            gpx = leg.export_gpx(name=name, creator=CREATOR)
-            with open(os.path.join(a.out, fn), 'w') as f:
-                f.write(gpx)
-            if a.outbox:
-                write_eml(a.outbox, fn, gpx, leg, r['day'])
-            written += 1
-        print(f"{r['day']}: {len(legs)} legs, "
-              f"{sum(len(leg) for leg in legs)} of {r['fixes']} fixes")
+            write_leg(a, leg, local_day(leg[0], a.tz_offset))
+        print(f'{len(legs)} legs, {sum(len(leg) for leg in legs)} of {len(points)} fixes')
+        written = len(legs)
+    else:
+        written = 0
+        for r in rows:
+            legs = segments(thin(days[r['day']], a.min_dist, a.min_secs), a.hours)
+            for leg in legs:
+                write_leg(a, leg, r['day'])
+                written += 1
+            print(f"{r['day']}: {len(legs)} legs, "
+                  f"{sum(len(leg) for leg in legs)} of {r['fixes']} fixes")
     print(f'\n{written} files written to {a.out}')
+
+
+def write_leg(a, leg, day):
+    """One GPX (and with `--outbox`, one message) for a leg, named by its local start day."""
+    # Both ends in the name: two legs of one day can share an end minute - a stop
+    # arrival and the clock hour that follows it - and one silently overwrote the
+    # other when the name carried only the end.
+    start = ts2dt(leg[0].ts) + timedelta(hours=a.tz_offset)
+    end = ts2dt(leg[-1].ts) + timedelta(hours=a.tz_offset)
+    name = f"{day} tracker feed, {ts2dt(leg[0].ts):%H:%M}-{ts2dt(leg[-1].ts):%H:%M} UTC"
+    fn = f"{a.prefix}-{day}-{start:%H%M}-{end:%H%M}.gpx"
+    gpx = leg.export_gpx(name=name, creator=CREATOR)
+    with open(os.path.join(a.out, fn), 'w') as f:
+        f.write(gpx)
+    if a.outbox:
+        write_eml(a.outbox, fn, gpx, leg, day)
 
 
 if __name__ == '__main__':
