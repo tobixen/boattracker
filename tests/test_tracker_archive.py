@@ -252,3 +252,62 @@ def test_travelled_measures_along_the_track_and_the_line():
     along, direct = tracker_archive.travelled(points)
     assert along == pytest.approx(2 * 11119, rel=0.01)
     assert direct == pytest.approx(0, abs=1)
+
+
+def test_reading_a_date_range_skips_the_fixes_outside_it(tmp_path):
+    ## The archive also holds 2023-2025 now, ~300 MB; parsing it all to look at three weeks
+    ## of 2021 took over five minutes a run. The window is in local days, so a fix late on
+    ## the UTC day before the range can still belong to its first local day and must be kept.
+    (tmp_path / 'gpstracker.raw').write_bytes(
+        (blob('210706', '120000', '53.1866', '35.3712')       # local 07-06, outside
+         + blob('210706', '223000', '53.1866', '35.3712')     # local 07-07 00:30, inside
+         + blob('210707', '120000', '53.1870', '35.3754')
+         + blob('240707', '120000', '53.1870', '35.3754')     # 2024, outside
+         + '(028042516052BZ00nonsense)').encode())
+    points, stats = tracker_archive.read_archive(str(tmp_path), lo='2021-07-07',
+                                                 hi='2021-07-07', tz_offset=2)
+    assert [p.ts for p in points] == ['2021-07-06T223000', '2021-07-07T120000']
+    assert stats['outside range'] == 1, 'counts the blobs skipped unparsed, not edge fixes'
+    assert stats['BZ-blob'] == 1, 'a blob of no known date is still parsed and counted'
+
+
+def test_gaps_are_listed_for_the_requested_days_only(tmp_path, monkeypatch, capsys):
+    raw = ''.join(blob(day, hhmmss, '53.1866', lon)
+                  for day, hhmmss, lon in [
+                      ('210706', '080000', '35.3712'), ('210706', '140000', '45.3712'),
+                      ('210707', '080000', '35.3712'), ('210707', '140000', '45.3712'),
+                      ('210708', '080000', '35.3712'), ('210708', '140000', '45.3712')])
+    (tmp_path / 'gpstracker.raw').write_bytes(raw.encode())
+    monkeypatch.setattr('sys.argv', ['tracker_archive', '--archive', str(tmp_path),
+                                     '--from', '2021-07-07', '--to', '2021-07-07', '--gaps'])
+    tracker_archive.main()
+    out = capsys.readouterr().out
+    assert '2021-07-07T080000   2021-07-07T140000' in out
+    assert '2021-07-06T' not in out.split('UTC\n', 1)[1]
+    assert '2021-07-08T' not in out.split('UTC\n', 1)[1]
+    assert '\n1 breaks over 30 minutes' in out
+
+
+def test_a_login_blob_is_dated_like_a_plain_fix():
+    login = b'028042516052BP05355228042516052210822A5751.2556N01139.7108E005.1185957'
+    assert tracker_archive.blob_date(login) == '2021-08-22'
+    assert tracker_archive.blob_date(b'028042516052BR00210822A5751.2638N') == '2021-08-22'
+
+
+def test_a_zero_dated_blob_is_left_to_the_parser():
+    ## The parser calls a 000000 date "fake news"; skipping it as outside the window would
+    ## hide that from the error count.
+    assert tracker_archive.blob_date(b'028042516052BR00000000A5751.2638N') is None
+
+
+def test_the_upper_edge_of_the_window_follows_the_offset(tmp_path):
+    ## West of UTC the local day ends after the UTC day does: 03:00 UTC on 07-08 is still
+    ## 07-07 at -5 h, and must be kept by a --to of 07-07 alone.
+    (tmp_path / 'gpstracker.raw').write_bytes(
+        (blob('210707', '120000', '53.1866', '35.3712')
+         + blob('210708', '030000', '53.1866', '35.3712')     # local 07-07 22:00, inside
+         + blob('210708', '120000', '53.1870', '35.3754')     # local 07-08, outside
+         + blob('210710', '120000', '53.1870', '35.3754')).encode())   # skipped unparsed
+    points, stats = tracker_archive.read_archive(str(tmp_path), hi='2021-07-07', tz_offset=-5)
+    assert [p.ts for p in points] == ['2021-07-07T120000', '2021-07-08T030000']
+    assert stats['outside range'] == 1

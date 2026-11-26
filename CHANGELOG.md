@@ -86,6 +86,10 @@ making this a python project rather than a directory of scripts.
 - With no `[daemon] status_dir`, the anchor alarm read its override file from the working
   directory instead of treating it as absent.
 - `read_text`/`write_text` took the locale's encoding rather than UTF-8.
+- `tracker_archive --gaps` ignored `--from`/`--to` and listed every break in the archive.
+  The archive now also holds 2023 .. 2025, and every run parsed all of it: with `--from` /
+  `--to` the blobs outside the range are skipped unparsed (over five minutes to ~10 s for
+  three weeks of 2021).
 
 ### Removed
 

@@ -1,9 +1,10 @@
-"""Read the 2021 raw tracker feed out of `gpstracker-archive/` and make days of it.
+"""Read the raw tracker feed out of `gpstracker-archive/` and make days of it.
 
-The single largest recoverable item in the project: the GSM/GPS tracker's raw server log for
-**2021-06-15 .. 08-22**, recovered from `/var/www/html/archive/gpstracker.raw.*.bz2` on the
-host serving `solveig.oslo.no`. It lands on the 64-day hole the journey currently crosses with
-one 122 nm straight line. See `../TRACKS-2021.md`.
+The GSM/GPS tracker's raw server log, recovered from the host serving `solveig.oslo.no`. It
+began as **2021-06-15 .. 08-22**, which filled the 64-day hole the journey crossed with one
+122 nm straight line (see `../TRACKS-2021.md`); it now also holds the rest of 2021, and
+2023 .. 2025-02. That is ~300 MB, so give `--from` / `--to`: blobs outside them are skipped
+without being parsed.
 
 ## What the archive is, and what has to be done to it
 
@@ -58,13 +59,50 @@ def blobs(data):
     return out
 
 
-def read_file(path):
-    """(points, error counter) for one archive file, compressed or not."""
+## The fix's UTC date, YYMMDD, sits at a fixed offset in the two blob forms that carry one:
+## the plain `BR00` fix, and the `BP05` login message with a fix appended (see `gt02a`).
+_DATED = ((b'028042516052BR00', 16), (b'028042516052BP05355228042516052', 31))
+
+
+def blob_date(blob):
+    """'YYYY-MM-DD' (UTC) read straight off a raw blob, or None when it carries no date.
+
+    Cheap on purpose: it lets a date window skip a blob without parsing it.
+    """
+    for prefix, at in _DATED:
+        if blob.startswith(prefix):
+            day = blob[at:at + 6]
+            ## A 00 month or day is what the parser calls a "fake news" blob: left to it,
+            ## so the error is still counted.
+            if len(day) == 6 and day.isdigit() and day[2:4] != b'00' and day[4:] != b'00':
+                return f'20{day[:2].decode()}-{day[2:4].decode()}-{day[4:].decode()}'
+    return None
+
+
+def utc_window(lo=None, hi=None):
+    """The UTC dates that can hold a fix of local days `lo` .. `hi`: one day of margin each
+    side, which covers any timezone offset."""
+    def shift(day, days):
+        return (datetime.strptime(day, '%Y-%m-%d') + timedelta(days=days)).strftime('%Y-%m-%d')
+    return (shift(lo, -1) if lo else None, shift(hi, 1) if hi else None)
+
+
+def read_file(path, lo=None, hi=None):
+    """(points, error counter) for one archive file, compressed or not.
+
+    `lo` / `hi` are UTC dates: a blob dated outside them is skipped unparsed and counted as
+    `outside range` - once per file it is in, as the rotated copies overlap. A blob with no readable date is always parsed, so its errors still count.
+    """
     opener = bz2.open if path.endswith('.bz2') else open
     with opener(path, 'rb') as f:
         data = f.read()
     points, errors = [], Counter()
     for blob in blobs(data):
+        if lo or hi:
+            day = blob_date(blob)
+            if day and ((lo and day < lo) or (hi and day > hi)):
+                errors['outside range'] += 1
+                continue
         try:
             point = parse_blob(blob)
         except BlobError as err:
@@ -75,13 +113,18 @@ def read_file(path):
     return points, errors
 
 
-def read_archive(directory=ARCHIVE):
+def read_archive(directory=ARCHIVE, lo=None, hi=None, tz_offset=2):
     """Every fix in the archive, deduplicated and sorted by time.
 
+    With `lo` / `hi` (local days, inclusive) only the fixes of those days are returned, and
+    blobs plainly outside them are never parsed - the archive runs 2021 .. 2025 and is far
+    too big to parse whole for a look at a few weeks.
+
     Returns (Path, stats). The rotated copies overlap heavily, so `stats['duplicate']` is
-    normally a large fraction of `stats['parsed']` — that is the archive being what it is,
+    normally a large fraction of `stats['parsed']` - that is the archive being what it is,
     not a fault.
     """
+    utc_lo, utc_hi = utc_window(lo, hi)
     stats = Counter()
     seen = set()
     points = []
@@ -89,11 +132,16 @@ def read_archive(directory=ARCHIVE):
         path = os.path.join(directory, name)
         if not os.path.isfile(path):
             continue
-        got, errors = read_file(path)
+        got, errors = read_file(path, utc_lo, utc_hi)
         stats['files'] += 1
         stats['parsed'] += len(got)
         stats.update(errors)
         for point in got:
+            if lo or hi:
+                ## The UTC window has a day of margin; these are the margin's fixes.
+                day = local_day(point, tz_offset)
+                if (lo and day < lo) or (hi and day > hi):
+                    continue
             key = (point.ts, point.lat, point.long)
             if key in seen:
                 stats['duplicate'] += 1
@@ -105,11 +153,16 @@ def read_archive(directory=ARCHIVE):
     return Path(points), stats
 
 
+def local_day(point, tz_offset=2):
+    """The local day 'YYYY-MM-DD' of a UTC fix."""
+    return (ts2dt(point.ts) + timedelta(hours=tz_offset)).strftime('%Y-%m-%d')
+
+
 def by_day(points, tz_offset=2):
     """{'YYYY-MM-DD': Path} keyed by *local* day, fixes left in UTC."""
     days = {}
     for point in points:
-        day = (ts2dt(point.ts) + timedelta(hours=tz_offset)).strftime('%Y-%m-%d')
+        day = local_day(point, tz_offset)
         days.setdefault(day, Path()).append(point)
     return days
 
@@ -393,13 +446,16 @@ def main():
     ap.add_argument('--write', action='store_true', help='write one GPX per listed day')
     a = ap.parse_args()
 
-    points, stats = read_archive(a.archive)
+    points, stats = read_archive(a.archive, a.lo, a.hi, a.tz_offset)
     print(f"{stats['files']} files, {stats['parsed']} blobs parsed, "
           f"{stats['duplicate']} duplicates dropped, {stats['fixes']} distinct fixes")
     errors = {k: v for k, v in stats.items()
-              if k not in ('files', 'parsed', 'duplicate', 'fixes')}
+              if k not in ('files', 'parsed', 'duplicate', 'fixes', 'outside range')}
     if errors:
         print('unparsed: ' + ', '.join(f'{k} {v}' for k, v in sorted(errors.items())))
+    if stats['outside range']:
+        print(f"{stats['outside range']} blobs outside {a.lo or '...'} .. {a.hi or '...'} "
+              'skipped unparsed (each rotated copy counted)')
     if not points:
         return
     print(f'{points[0].ts} .. {points[-1].ts} UTC\n')
@@ -417,8 +473,7 @@ def main():
 
     days = by_day(points, a.tz_offset)
     rows = [r for r in summary_rows(days, a.min_dist, a.min_secs, a.tz_offset)
-            if (not a.lo or r['day'] >= a.lo) and (not a.hi or r['day'] <= a.hi)
-            and r['along_nm'] >= a.moved]
+            if r['along_nm'] >= a.moved]
     print(f'{"day":11s} {"fixes":>6s} {"first":>5s} {"last":>5s} '
           f'{"track":>7s} {"line":>7s} {"kn95":>5s} {"kn":>5s}  end position')
     total = 0.0
