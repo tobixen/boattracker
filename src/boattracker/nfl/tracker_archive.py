@@ -410,7 +410,7 @@ def write_eml(outbox, filename, gpx, leg, day):
     msg = EmailMessage()
     msg['From'], msg['To'] = config.FROM, TO
     msg['Subject'] = config.subject(
-        f'{day} ({leg[0].ts[11:16]}-{leg[-1].ts[11:16]} UTC)')
+        f'{day} ({ts2dt(leg[0].ts):%H:%M}-{ts2dt(leg[-1].ts):%H:%M} UTC)')
     msg.set_content(
         f'Track for S/Y {config.BOAT_NAME}, {day}.\n\n'
         f'{len(leg)} points, {leg[0].ts} to {leg[-1].ts} UTC, {along/1852:.2f} nm.\n\n'

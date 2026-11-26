@@ -410,3 +410,10 @@ def test_split_at_without_legs_is_refused(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         tracker_archive.main()
 
+
+def test_the_mail_subject_gives_clock_times(tmp_path):
+    from email import message_from_bytes
+    leg = tracker_archive.segments(sail(10 * 60, 60), hours=None)[0]
+    tracker_archive.write_eml(str(tmp_path), 'x.gpx', leg.export_gpx(), leg, '2021-07-07')
+    subject = message_from_bytes((tmp_path / 'x.eml').read_bytes())['Subject']
+    assert '(10:00-10:59 UTC)' in subject
