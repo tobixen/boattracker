@@ -15,7 +15,8 @@ making this a python project rather than a directory of scripts.
 
 - `tracker_archive --legs` cuts the raw feed into one leg per passage, stop to stop across
   the whole date range, with no cut at midnight or on the clock hour, which is the owner's
-  rule for journey fixes since 2026-08-14.
+  rule for journey fixes since 2026-08-14. `--split-at UTC` (repeatable) also cuts a leg at
+  a given instant, for a multi-day passage whose middle day should get a fix of its own.
 - `boattracker.nfl.time_and_positions`: writes the diary's "Time and positions" sections for
   passage days from the phone tracks, the journey snapshot and GPS-tagged photographs. A
   stop counts only where the journey has a fix, and is reported at the fix's position, so a

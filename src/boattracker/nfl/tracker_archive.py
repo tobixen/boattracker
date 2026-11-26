@@ -34,7 +34,7 @@ import argparse
 import bz2
 import os
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from boattracker import config  # noqa: E402
 from boattracker.tracker.gt02a import BlobError, parse_blob  # noqa: E402
@@ -345,6 +345,33 @@ def segments(points, hours=2, radius=50, stop_minutes=30, gap_minutes=30,
     return legs
 
 
+def utc_instant(text):
+    """`--split-at`'s value as a naive UTC datetime, like `ts2dt`; an offset or `Z` is honoured."""
+    t = datetime.fromisoformat(text)
+    if t.tzinfo is not None:
+        t = t.astimezone(UTC).replace(tzinfo=None)
+    return t
+
+
+def split_at(legs, instants):
+    """Cut each leg that runs across one of `instants` (UTC datetimes) in two.
+
+    The exception to stop-to-stop: a passage of several days is one fix, so a day in the
+    middle has none of its own. The halves share the last fix before the cut, so the line
+    is drawn without a gap and the first half is dated just before the instant.
+    """
+    out = []
+    for leg in legs:
+        pieces = [leg]
+        for t in sorted(instants):
+            last = pieces[-1]
+            before = [p for p in last if ts2dt(p.ts) < t]
+            if 2 <= len(before) < len(last):
+                pieces[-1:] = [Path(before), Path(last[len(before) - 1:])]
+        out.extend(pieces)
+    return out
+
+
 def summary_rows(days, min_dist=25, min_secs=600, tz_offset=2):
     """One row per day, distances measured on the *thinned* track.
 
@@ -447,10 +474,16 @@ def main():
     ap.add_argument('--legs', action='store_true',
                     help='one leg stop to stop across the whole range: no clock-hour or '
                          'midnight cuts (the owner\'s rule since 2026-08-14)')
+    ap.add_argument('--split-at', action='append', default=[], metavar='UTC',
+                    help='with --legs, also cut a leg at this instant: UTC, or with an '
+                         'offset (YYYY-MM-DDTHH:MM[Z|+HH:MM], repeatable)')
     ap.add_argument('--out', default=GPXDIR)
     ap.add_argument('--prefix', default='tracker2021')
     ap.add_argument('--write', action='store_true', help='write one GPX per listed day')
     a = ap.parse_args()
+    if a.split_at and not a.legs:
+        ap.error('--split-at needs --legs')
+    instants = [utc_instant(t) for t in a.split_at]
 
     points, stats = read_archive(a.archive, a.lo, a.hi, a.tz_offset)
     print(f"{stats['files']} files, {stats['parsed']} blobs parsed, "
@@ -501,6 +534,7 @@ def main():
     if a.legs:
         ## Stop to stop over the whole range: a night passage is one leg, not two days.
         legs = segments(thin(points, a.min_dist, a.min_secs), None)
+        legs = split_at(legs, instants)
         for leg in legs:
             write_leg(a, leg, local_day(leg[0], a.tz_offset))
         print(f'{len(legs)} legs, {sum(len(leg) for leg in legs)} of {len(points)} fixes')

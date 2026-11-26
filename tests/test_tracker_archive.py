@@ -322,9 +322,8 @@ def test_without_clock_hours_a_passage_is_one_leg():
     assert legs[0][-1].ts == '2021-07-07T180000'
 
 
-def test_a_leg_runs_over_midnight_in_leg_mode(tmp_path, monkeypatch):
-    ## A night passage, 22:30 .. 02:30 local, between an hour at each end: one leg and one
-    ## file, not one per diary day.
+def night_passage(tmp_path):
+    """22:30 .. 02:30 local (20:30 .. 00:30 UTC) under way, an hour still at each end."""
     fixes = []
     for minute in range(0, 6 * 60):              # 19:30 .. 01:29 UTC, one fix a minute
         utc = 19 * 60 + 30 + minute
@@ -333,9 +332,81 @@ def test_a_leg_runs_over_midnight_in_leg_mode(tmp_path, monkeypatch):
         lat_min = f'{10 + under_way * 0.12:07.4f}'
         fixes.append(blob(day, f'{hhmm // 60:02d}{hhmm % 60:02d}00', lat_min, '35.3712'))
     (tmp_path / 'gpstracker.raw').write_bytes(''.join(fixes).encode())
+
+
+def test_a_leg_runs_over_midnight_in_leg_mode(tmp_path, monkeypatch):
+    ## A night passage, 22:30 .. 02:30 local, between an hour at each end: one leg and one
+    ## file, not one per diary day.
+    night_passage(tmp_path)
     out = tmp_path / 'out'
     monkeypatch.setattr('sys.argv', ['tracker_archive', '--archive', str(tmp_path),
                                      '--from', '2021-07-07', '--to', '2021-07-08',
                                      '--legs', '--write', '--out', str(out)])
     tracker_archive.main()
     assert sorted(p.name for p in out.iterdir()) == ['tracker2021-2021-07-07-2230-0230.gpx']
+
+
+def test_a_leg_is_split_at_a_requested_instant():
+    ## The owner's exception to stop-to-stop, 2026-11-26: a 43 h passage split at UTC
+    ## midnight so the day in the middle gets a fix of its own. The two halves share the
+    ## last fix before the cut, so the drawn line stays continuous.
+    legs = tracker_archive.segments(sail(10 * 60, 8 * 60), hours=None)
+    split = tracker_archive.split_at(legs, [ts2dt('2021-07-07T140000')])
+    assert len(split) == 2
+    assert split[0][-1].ts == '2021-07-07T135900'
+    assert split[1][0].ts == '2021-07-07T135900'
+    assert split[1][-1].ts == legs[0][-1].ts
+    assert len(split[0]) + len(split[1]) == len(legs[0]) + 1
+
+
+def test_a_split_instant_outside_every_leg_changes_nothing():
+    legs = tracker_archive.segments(sail(10 * 60, 60), hours=None)
+    assert tracker_archive.split_at(legs, [ts2dt('2021-07-07T200000')]) == legs
+
+
+def test_several_instants_cut_one_leg_into_several():
+    legs = tracker_archive.segments(sail(10 * 60, 8 * 60), hours=None)
+    split = tracker_archive.split_at(legs, [ts2dt('2021-07-07T160000'), ts2dt('2021-07-07T120000')])
+    assert [(leg[0].ts, leg[-1].ts) for leg in split] == [
+        ('2021-07-07T100000', '2021-07-07T115900'),
+        ('2021-07-07T115900', '2021-07-07T155900'),
+        ('2021-07-07T155900', legs[0][-1].ts)]
+
+
+def test_an_instant_after_the_first_fix_only_leaves_the_leg_whole():
+    ## One fix before the cut would be a first half of a single point: not a leg.
+    legs = tracker_archive.segments(sail(10 * 60, 60), hours=None)
+    assert tracker_archive.split_at(legs, [ts2dt('2021-07-07T100030')]) == legs
+
+
+def test_an_instant_on_a_fix_ends_the_first_half_just_before_it():
+    legs = tracker_archive.segments(sail(10 * 60, 60), hours=None)
+    split = tracker_archive.split_at(legs, [ts2dt('2021-07-07T103000')])
+    assert split[0][-1].ts == '2021-07-07T102900'
+
+
+@pytest.mark.parametrize('instant', ['2021-07-07T22:00', '2021-07-07T22:00Z',
+                                     '2021-07-08T00:00+02:00'])
+def test_split_at_from_the_command_line_takes_utc_with_or_without_an_offset(
+        tmp_path, monkeypatch, instant):
+    night_passage(tmp_path)
+    out = tmp_path / 'out'
+    monkeypatch.setattr('sys.argv', ['tracker_archive', '--archive', str(tmp_path),
+                                     '--from', '2021-07-07', '--to', '2021-07-08',
+                                     '--legs', '--split-at', instant,
+                                     '--write', '--out', str(out)])
+    tracker_archive.main()
+    names = sorted(p.name for p in out.iterdir())
+    assert len(names) == 2
+    assert names[0].startswith('tracker2021-2021-07-07-2230-')
+    assert names[1].endswith('-0230.gpx')
+
+
+def test_split_at_without_legs_is_refused(tmp_path, monkeypatch):
+    night_passage(tmp_path)
+    monkeypatch.setattr('sys.argv', ['tracker_archive', '--archive', str(tmp_path),
+                                     '--split-at', '2021-07-07T22:00', '--write',
+                                     '--out', str(tmp_path / 'out')])
+    with pytest.raises(SystemExit):
+        tracker_archive.main()
+
