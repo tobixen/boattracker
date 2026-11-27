@@ -14,8 +14,14 @@ lines from:
 * GPS-tagged photographs whose fix clock agrees with the shutter, minus those flagged
   ashore or dropped in `manual-locations.json` (SOURCES.md, "Photograph positions").
 
-Raymarine point counts cannot time a passage: under way the distance trigger fires, so
-they measure distance (RAYMARINE-GPX.md, "Sampling interval"). Where only fixes are timed,
+From Track 8 (2025-02-21) on, **the chartplotter's point count is a clock**: under way it
+lays a point every 2.0 s, then 5.0 s (RAYMARINE-GPX.md, "Sampling interval"). Segments dated
+in the segment ledger (`<journey>/plotter-segments.tsv`, `date_segments`) are counted by
+`plotter_clock`, anchored on the phone and photographs, and a leg along one is narrowed by
+the count: its departure and arrival windows, and its time under way where the windows can
+hold it. A segment with no anchor counts only on its own ledger day. A journey stop the
+plotter moved straight through, at full steps and when the next leg leaves, is folded
+away. Where only fixes are timed,
 a departure is known to lie between two of them; it is clamped to the diary day whose
 heading names the passage, and a 7 kts ceiling bounds the rest. Hence "+/-" and "A .. B".
 
@@ -56,7 +62,7 @@ from typing import NamedTuple
 
 from boattracker import config
 from boattracker.geo import NM, hav
-from boattracker.nfl import exif_index, import_phone_export, omaps_export
+from boattracker.nfl import exif_index, import_phone_export, omaps_export, plotter_clock
 from boattracker.places import AT_SEA, LatLon, read_places, zone_at
 
 UTC = D.UTC
@@ -65,6 +71,7 @@ MARKER = 'boattracker.nfl.time_and_positions'
 ## must recognise them, or it would take them for hand-maintained and never replace them.
 MARKERS = (MARKER, 'journey/archive/time_and_positions.py')
 SOURCE_NAMES = {'phone': 'the Organic Maps phone track', 'nfl': 'the noforeignland journey',
+                'plotter': "the chartplotter's point count",
                 'photo': 'photograph geotags'}
 Sections = dict[str, tuple[list[str], list[str]]]  # day -> (sources, lines)
 MAX_KTS = 7  # nothing here sails faster than this on average; it bounds an untimed passage
@@ -648,6 +655,140 @@ def with_missed(phone: list[Leg], journey: list[Leg], earlier: Iterable[Leg] = (
     return before[::-1] + phone + after
 
 
+PLOTTER_M = 300  # a leg end this close to a plotter point is that point
+
+
+def _on_plotter(g: Leg, t: plotter_clock.Timed) -> tuple[int, int] | None:
+    """(departure index, arrival index) of a leg along a counted segment, if it runs there."""
+    def nearest(pos, frm=0):
+        d, k = min(((hav(pos, t.points[k]), k) for k in range(frm, len(t.points))), default=(9e9, -1))
+        return k if d <= PLOTTER_M else None
+    ia = nearest(g.a)
+    if ia is None:
+        return None
+    ib = nearest(g.b, ia + 1)
+    if ib is None:
+        return None
+    # leaving a stop is its last point; arriving at one, its first
+    while ia + 1 < ib and t.still[ia] and t.still[ia + 1]:
+        ia += 1
+    while ib - 1 > ia and t.still[ib] and t.still[ib - 1]:
+        ib -= 1
+    return ia, ib
+
+
+def _squeeze(g: Leg, t: plotter_clock.Timed, ia: int, ib: int, dmin: float, dmax: float):
+    dep_lo = max(g.dep_lo, t.lo[ia], g.arr_lo - dmax)
+    dep_hi = min(g.dep_hi, t.hi[ia], g.arr_hi - dmin)
+    arr_lo = max(g.arr_lo, t.lo[ib], dep_lo + dmin)
+    arr_hi = min(g.arr_hi, t.hi[ib], dep_hi + dmax)
+    return dep_lo, dep_hi, arr_lo, arr_hi
+
+
+FIX_SLACK = 1800  # how far a fix's time may be off the count and still be the same move
+
+
+def _anchored(t: plotter_clock.Timed, ia: int, ib: int) -> bool:
+    return all(math.isfinite(x) for x in (t.lo[ia], t.hi[ia], t.lo[ib], t.hi[ib]))
+
+
+def _near(g: Leg, t: plotter_clock.Timed, ia: int, ib: int) -> bool:
+    return (t.lo[ia] <= g.dep_hi + FIX_SLACK and t.hi[ia] >= g.dep_lo - FIX_SLACK
+            and t.lo[ib] <= g.arr_hi + FIX_SLACK and t.hi[ib] >= g.arr_lo - FIX_SLACK)
+
+
+FOLD_SLACK = 300  # how far the next leg's departure may be off the count's time there
+
+
+def _passed_through(t: plotter_clock.Timed, i: int) -> bool:
+    """Whether the plotter moved on from point i rather than stopping there.
+
+    A short stop leaves too few points for a stop, so the gaps either side of i have to
+    be full steps under way too."""
+    if t.still[i] or not 0 < i < len(t.points) - 1:
+        return False
+    return all(hav(t.points[k], t.points[k+1]) >= plotter_clock.STILL_M for k in (i - 1, i))
+
+
+def _leaves_in_time(g: Leg, t: plotter_clock.Timed, i: int) -> bool:
+    """Whether g's departure window meets the count's time at point i."""
+    return t.lo[i] <= g.dep_hi + FOLD_SLACK and t.hi[i] >= g.dep_lo - FOLD_SLACK
+
+
+def _under_way(g: Leg, dmin: float, dmax: float, dep_lo: float, dep_hi: float,
+               arr_lo: float, arr_hi: float) -> tuple[float, float]:
+    """(tmin, tmax) for a narrowed leg: the count's, unless the windows cannot hold it."""
+    tmin = max(g.tmin, dmin, arr_lo - dep_hi)
+    tmax = min(g.tmax, dmax, arr_hi - dep_lo)
+    if tmin > tmax:
+        # the windows came from the anchors, which are clocks; the count lost to them
+        tmin, tmax = max(g.tmin, arr_lo - dep_hi), min(g.tmax, arr_hi - dep_lo)
+    return tmin, tmax
+
+
+def narrow_by_plotter(legs: list[Leg], segments: Iterable[plotter_clock.Timed]) -> list[Leg]:
+    """The legs, each narrowed by the counted plotter segment it runs along, if any.
+
+    The count gives every plotter point a window and the time between two points, so a leg
+    along a counted segment takes the windows of its departure and arrival points, and its
+    duration from the count, as far as the windows can hold it. A segment whose windows
+    contradict the leg's is another day's, and left out. Two legs meeting where the plotter
+    moved straight through, at full steps and when the next leg leaves, are one leg: the
+    journey had a fix there, the boat did not stop."""
+    segments = list(segments)
+    out: list[Leg] = []
+    where: list[tuple[plotter_clock.Timed, int, int] | None] = []
+    for g in legs:
+        best = None
+        for t in segments:
+            on = _on_plotter(g, t)
+            if not on:
+                continue
+            ia, ib = on
+            dmin, dmax = t.duration(ia, ib)
+            dep_lo, dep_hi, arr_lo, arr_hi = _squeeze(g, t, ia, ib, dmin, dmax)
+            if dep_lo > dep_hi or arr_lo > arr_hi:
+                # a fix's own time is often interpolated, the anchors are clocks: a count
+                # anchored at both ends wins a small disagreement, not another day's
+                if not (_anchored(t, ia, ib) and _near(g, t, ia, ib)):
+                    continue
+                dep_lo, dep_hi, arr_lo, arr_hi = t.lo[ia], t.hi[ia], t.lo[ib], t.hi[ib]
+            tmin, tmax = _under_way(g, dmin, dmax, dep_lo, dep_hi, arr_lo, arr_hi)
+            n = replace(g, dep_lo=dep_lo, dep_hi=dep_hi, arr_lo=arr_lo, arr_hi=arr_hi,
+                        tmin=tmin, tmax=tmax, srcs=g.srcs | {'plotter'})
+            if best is None or n.width < best[0].width:
+                best = (n, (t, ia, ib))
+        if best is None:
+            prev = where[-1] if where else None
+            if (prev and out[-1].b == g.a and _passed_through(prev[0], prev[2])
+                    and _leaves_in_time(g, prev[0], prev[2])):
+                # the journey's stop at the previous leg's end is where the plotter moved on
+                p = out[-1]
+                out[-1] = replace(p, arr_lo=g.arr_lo, arr_hi=g.arr_hi, b=g.b, dist=p.dist + g.dist,
+                                  tmin=max(p.tmin + g.tmin, g.arr_lo - p.dep_hi),
+                                  tmax=g.arr_hi - p.dep_lo, srcs=p.srcs | g.srcs, arr_fix=g.arr_fix)
+                where[-1] = None
+                continue
+            out.append(g)
+            where.append(None)
+            continue
+        n, w = best
+        prev = where[-1] if where else None
+        if (prev and out[-1].b == g.a and prev[0] is w[0] and prev[2] <= w[1]
+                and not w[0].still[w[1]] and not prev[0].still[prev[2]]):
+            p = out[-1]
+            t = w[0]
+            dmin, dmax = t.duration(prev[1], w[2])
+            n = replace(p, arr_lo=n.arr_lo, arr_hi=n.arr_hi, b=n.b, dist=p.dist + n.dist,
+                        tmin=max(dmin, n.arr_lo - p.dep_hi), tmax=min(dmax, n.arr_hi - p.dep_lo),
+                        srcs=p.srcs | n.srcs, arr_fix=n.arr_fix)
+            out[-1], where[-1] = n, (t, prev[1], w[2])
+            continue
+        out.append(n)
+        where.append(w)
+    return out
+
+
 def render(leg: Leg, name_a: str, name_b: str) -> list[str]:
     dep = _when(leg.dep_lo, leg.dep_hi)
     if leg.tmax - leg.tmin <= 1800:
@@ -677,9 +818,47 @@ def hand_maintained(text: str) -> set[str]:
     return done
 
 
+def _counted(plotter, timed_pts: list[Pt], lo: float, hi: float) -> dict[str, list[plotter_clock.Timed]]:
+    """{diary day: counted segments that may run on it}, each anchored on the timed points."""
+    out: dict[str, list[plotter_clock.Timed]] = {}
+    fixes = [(p.lat, p.lon, p.t) for p in timed_pts]
+    times = [f[2] for f in fixes]
+    for track, seg, day, pts in plotter:
+        step = plotter_clock.step(track)
+        d0 = D.datetime.fromisoformat(day).replace(tzinfo=UTC).timestamp()
+        if step is None or len(pts) < 2 or not (lo - 86400 <= d0 <= hi):
+            continue
+        near = fixes[bisect.bisect_left(times, d0 - 86400):bisect.bisect_right(times, d0 + 2*86400)]
+        found = plotter_clock.anchors(pts, near, step_s=step)
+        t = plotter_clock.timed(track, seg, pts, found, step)
+        if t is None:
+            continue
+        # an untimed count is only as good as its ledger day
+        for k in ((-1, 0, 1) if found else (0,)):
+            key = (D.date.fromisoformat(day) + D.timedelta(days=k)).isoformat()
+            out.setdefault(key, []).append(t)
+    return out
+
+
+def load_plotter(ledger: str, corpus: Iterable[str]) -> list[tuple[str, int, str, list]]:
+    """The dated segments of the plotter segment ledger, with their points from the corpus."""
+    from boattracker.nfl import date_segments, timestamp_segments
+    if not os.path.exists(ledger):
+        return []
+    rows = {k: r for k, r in date_segments.read_ledger(ledger).items()
+            if r.date and plotter_clock.step(r.track)}
+    found = date_segments.dedupe([(f, sg) for f in corpus for sg in timestamp_segments.load_segments(f)])
+    return [(sg.track, sg.idx, rows[(sg.track, sg.idx)].date, sg.points)
+            for _f, sg in found if (sg.track, sg.idx) in rows]
+
+
 def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_paths: Iterable[str],
-             photos: str | None, places_path: str) -> tuple[Sections, list[str]]:
-    """The sections, keyed by day, and the draft text for review."""
+             photos: str | None, places_path: str,
+             plotter: Iterable[tuple[str, int, str, list]] = ()) -> tuple[Sections, list[str]]:
+    """The sections, keyed by day, and the draft text for review.
+
+    `plotter` is the dated plotter segments, (track, index, day, points), from the segment
+    ledger; those with a known step are counted, anchored on the phone and photographs."""
     lo = (D.datetime.fromisoformat(frm).replace(tzinfo=UTC) - D.timedelta(days=4)).timestamp()
     hi = (D.datetime.fromisoformat(to).replace(tzinfo=UTC) + D.timedelta(days=3)).timestamp()
     pics = photo_points(photos) if photos else []
@@ -690,6 +869,7 @@ def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_path
     phone = clean_phone(sorted(p for p in phone if lo <= p.t <= hi), journey.near)
     pl, at_sea, ashore = read_places(places_path) if os.path.exists(places_path) else ([], [], [])
     boat, phone = not_ashore(boat, ashore), not_ashore(phone, ashore)
+    counted = _counted(plotter, phone, lo, hi)
     done = hand_maintained(diary_text)
     fixes = journey.fixes()
     heads = [line for line in diary_text.split('\n') if line.startswith('## ')]
@@ -739,6 +919,9 @@ def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_path
         else:
             # but a phone that ran for one move of the day still times that move
             legs = retime_ends(retime(legs, [g for g in ph_legs if not _walking(g)]), ph)
+        # a leg folded into the one before is this day's too, under its own key
+        reported.update(_key(g) for g in legs if _key(g) is not None)
+        legs = narrow_by_plotter(legs, counted.get(m.group(1), []))
         reported.update(_key(g) for g in legs if _key(g) is not None)
         earlier += legs
         if not legs:
@@ -861,7 +1044,9 @@ def main(argv: list[str] | None = None) -> None:
     sections, draft = generate(text, a.frm, a.to, journey=journey,
                                phone_paths=a.phone or _default_phone_paths(),
                                photos=config.PHOTOS,
-                               places_path=os.path.join(config.JOURNEY, 'PLACES.md'))
+                               places_path=os.path.join(config.JOURNEY, 'PLACES.md'),
+                               plotter=load_plotter(os.path.join(config.JOURNEY, 'plotter-segments.tsv'),
+                                                    sorted(glob.glob(os.path.join(config.DATA, 'Tracks*.gpx')))))
     print('\n'.join(draft))
     print("\n## Passages in the track data on days without a passage heading\n")
     print('\n'.join(journey.unheaded(text, a.frm, a.to)))

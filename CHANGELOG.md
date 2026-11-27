@@ -13,6 +13,11 @@ making this a python project rather than a directory of scripts.
 
 ### Added
 
+- The diary's "Time and positions" sections time passages by the chartplotter's own point
+  count where the plotter segment is dated, from Track 8 (2025-02-21) on: a passage along a
+  counted segment gets its departure, arrival and time under way to the minute where the
+  phone or a photograph anchors it, and a journey stop the plotter moved straight through,
+  without slowing, is no longer reported as a stop.
 - `boattracker.nfl.date_segments` writes down which day each Raymarine plotter segment was
   recorded, in a ledger the owner can correct by hand. It dates from the phone track,
   photographs, journey fixes, diary headings and export file names, in that order of

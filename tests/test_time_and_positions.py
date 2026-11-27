@@ -685,3 +685,138 @@ def test_a_stop_does_not_take_a_fix_from_after_the_boat_left():
     legs = tp.passages(pts, d0, d1, 9e12, fixes=fixes)
     assert len(legs) == 1
     assert legs[0].a == night
+
+
+# The plotter's point count, 2026-11-28: a leg runs along a dated plotter segment, and the
+# segment's counted windows narrow the leg's; a stop the journey has where the plotter was
+# moving through is no stop.
+from boattracker.nfl import plotter_clock as pc  # noqa: E402
+
+
+def counted_segment(t0, n_move, n_still_end=0, metres=12.0, start=(40.0, 28.0)):
+    """A dated plotter segment under way for n_move points, anchored at both ends of it."""
+    dlat = metres / 111_195
+    pts = [(start[0] + k * dlat, start[1]) for k in range(n_move)]
+    pts += [(pts[-1][0] + (k % 3) * 2e-6, pts[-1][1]) for k in range(n_still_end)]
+    anchors = {0: t0, n_move - 1: t0 + (n_move - 1) * 5.0}
+    return pc.timed("Track 52", 5, pts, anchors, 5.0)
+
+
+def test_a_leg_along_a_counted_segment_takes_its_minutes():
+    seg_ = counted_segment(ts("2025-08-30T07:15"), 500)
+    a, b = seg_.points[0], seg_.points[499]
+    g = tp.Leg(ts("2025-08-30T00:00"), ts("2025-08-30T11:00"), ts("2025-08-30T06:00"),
+               ts("2025-08-30T12:16"), a, b, dist=6000, tmin=60, tmax=40000)
+    (got,) = tp.narrow_by_plotter([g], [seg_])
+    assert abs(got.dep_lo - ts("2025-08-30T07:15")) <= 15 and got.dep_hi - got.dep_lo <= 40
+    assert abs(got.arr_lo - (ts("2025-08-30T07:15") + 499 * 5)) <= 40
+    assert "plotter" in got.srcs
+
+
+def test_a_counted_segment_that_contradicts_the_leg_is_ignored():
+    seg_ = counted_segment(ts("2025-08-31T07:15"), 500)   # the next day: not this leg
+    g = tp.Leg(ts("2025-08-30T00:00"), ts("2025-08-30T11:00"), ts("2025-08-30T06:00"),
+               ts("2025-08-30T12:16"), seg_.points[0], seg_.points[499], dist=6000, tmin=60, tmax=40000)
+    assert tp.narrow_by_plotter([g], [seg_]) == [g]
+
+
+def test_a_stop_where_the_plotter_moved_through_is_folded():
+    # 2025-08-30: the 12:16 Bosphorus fix lies inside Track 52 s5, which never stopped there
+    seg_ = counted_segment(ts("2025-08-30T07:15"), 1000)
+    a, mid, b = seg_.points[0], seg_.points[600], seg_.points[999]
+    t_mid = ts("2025-08-30T07:15") + 600 * 5
+    g1 = tp.Leg(ts("2025-08-30T00:00"), ts("2025-08-30T11:00"), ts("2025-08-30T06:00"), t_mid + 60,
+                a, mid, dist=7000, tmin=60, tmax=40000, srcs={"nfl"})
+    g2 = tp.Leg(t_mid - 60, ts("2025-08-30T15:00"), t_mid, ts("2025-08-30T16:00"),
+                mid, b, dist=5000, tmin=60, tmax=40000, srcs={"nfl"})
+    (got,) = tp.narrow_by_plotter([g1, g2], [seg_])
+    assert got.a == a and got.b == b
+    assert got.dist == 12000
+    assert abs(got.arr_lo - (ts("2025-08-30T07:15") + 999 * 5)) <= 40
+
+
+def test_an_arrival_at_a_stop_is_the_stop_beginning():
+    # 2025-08-29 s3: under way, then lying at anchor; the leg ends at the anchor fix
+    seg_ = counted_segment(ts("2025-08-29T17:58"), 500, n_still_end=118)
+    g = tp.Leg(ts("2025-08-29T12:00"), ts("2025-08-29T19:00"), ts("2025-08-29T12:30"),
+               ts("2025-08-29T19:00"), seg_.points[0], seg_.points[-1], dist=4600, tmin=60, tmax=30000)
+    (got,) = tp.narrow_by_plotter([g], [seg_])
+    assert abs(got.arr_lo - (ts("2025-08-29T17:58") + 499 * 5)) <= 40
+    assert got.arr_hi - got.arr_lo <= 60
+
+
+def test_an_anchored_count_beats_a_fix_time_a_minute_off():
+    # 2025-08-30: the Bosphorus fix says 12:16:24, the count from the photo and the phone
+    # 12:17:16; the fix's time was itself interpolated, the anchors are clocks
+    seg_ = counted_segment(ts("2025-08-30T07:15"), 600)
+    t_end = ts("2025-08-30T07:15") + 599 * 5
+    g = tp.Leg(ts("2025-08-30T00:00"), ts("2025-08-30T11:00"), t_end - 1800, t_end - 52,
+               seg_.points[0], seg_.points[599], dist=7000, tmin=60, tmax=40000)
+    (got,) = tp.narrow_by_plotter([g], [seg_])
+    assert abs(got.arr_lo - t_end) <= 40 and "plotter" in got.srcs
+
+
+def test_a_leg_leaving_where_the_plotter_moved_through_is_folded_in():
+    # 2025-08-30: the leg after the Bosphorus fix runs on to Varna, off the counted segment
+    seg_ = counted_segment(ts("2025-08-30T07:15"), 1000)
+    a, mid = seg_.points[0], seg_.points[600]
+    varna = (43.19, 27.92)
+    t_mid = ts("2025-08-30T07:15") + 600 * 5
+    g1 = tp.Leg(ts("2025-08-30T00:00"), ts("2025-08-30T11:00"), ts("2025-08-30T06:00"), t_mid + 60,
+                a, mid, dist=7000, tmin=60, tmax=40000, srcs={"nfl"})
+    g2 = tp.Leg(t_mid - 3000, t_mid + 3000, ts("2025-08-31T19:00"), ts("2025-08-31T20:21"),
+                mid, varna, dist=250000, tmin=100000, tmax=120000, srcs={"nfl"})
+    (got,) = tp.narrow_by_plotter([g1, g2], [seg_])
+    assert got.a == a and got.b == varna and got.arr_hi == ts("2025-08-31T20:21")
+    assert abs(got.dep_lo - ts("2025-08-30T07:15")) <= 40
+
+
+def test_a_stop_the_count_cannot_have_moved_through_is_kept():
+    # 2026-07-07: Galata Bay to G G Yacht Club and back; the boat lay 20 minutes at the
+    # club, so the next leg leaves long after the count has it passing there
+    seg_ = counted_segment(ts("2026-07-07T18:30"), 1000)
+    a, mid = seg_.points[0], seg_.points[600]
+    away = (43.17, 27.94)
+    t_mid = ts("2026-07-07T18:30") + 600 * 5
+    g1 = tp.Leg(ts("2026-07-07T18:00"), ts("2026-07-07T19:00"), t_mid - 60, t_mid + 60,
+                a, mid, dist=7000, tmin=60, tmax=40000, srcs={"nfl"})
+    g2 = tp.Leg(t_mid + 1200, t_mid + 1260, t_mid + 2200, t_mid + 2300,
+                mid, away, dist=2500, tmin=60, tmax=4000, srcs={"nfl"})
+    got = tp.narrow_by_plotter([g1, g2], [seg_])
+    assert len(got) == 2 and got[1].a == mid
+
+
+def test_a_berth_with_only_a_few_points_is_no_moving_through():
+    # a short stop leaves only a couple of sub-metre gaps: too few for a stop, but the
+    # plotter did not move on from there either
+    seg_ = counted_segment(ts("2026-07-07T18:30"), 500)
+    pts = seg_.points + [(seg_.points[-1][0] + k * 1e-6, seg_.points[-1][1]) for k in range(1, 4)]
+    pts += [(pts[-1][0] + k * 12 / 111_195, pts[-1][1]) for k in range(1, 100)]
+    anchors = {0: ts("2026-07-07T18:30"), 499: ts("2026-07-07T18:30") + 499 * 5.0}
+    seg2 = pc.timed("Track 52", 5, pts, anchors, 5.0)
+    berth = pts[499]
+    away = (43.17, 27.94)
+    g1 = tp.Leg(ts("2026-07-07T18:00"), ts("2026-07-07T19:00"), ts("2026-07-07T19:00"),
+                ts("2026-07-07T19:30"), pts[0], berth, dist=6000, tmin=60, tmax=40000, srcs={"nfl"})
+    g2 = tp.Leg(ts("2026-07-07T19:00"), ts("2026-07-07T21:00"), ts("2026-07-07T21:00"),
+                ts("2026-07-07T22:00"), berth, away, dist=2500, tmin=60, tmax=9000, srcs={"nfl"})
+    got = tp.narrow_by_plotter([g1, g2], [seg2])
+    assert len(got) == 2
+
+
+def test_an_unanchored_segment_counts_on_its_own_day_only():
+    # with no phone or photo on it the count is untimed; filed under the neighbouring days
+    # too it could lend its duration to a leg over the same water a day off
+    pts = [(40.0 + k * 12 / 111_195, 28.0) for k in range(300)]
+    got = tp._counted([("Track 52", 5, "2025-08-30", pts)], [],
+                      ts("2025-08-25T00:00"), ts("2025-09-05T00:00"))
+    assert sorted(got) == ["2025-08-30"]
+
+
+def test_times_under_way_never_cross():
+    # anchors contradicting the leg: the windows come from the anchors, and the time under
+    # way from them too rather than a count the windows cannot hold
+    g = tp.Leg(0, 10, 100, 200, (40.0, 28.0), (40.1, 28.0), dist=6000, tmin=60, tmax=40000)
+    tmin, tmax = tp._under_way(g, 5000, 5100, 0, 10, 100, 200)
+    assert tmin <= tmax
+    assert (tmin, tmax) == (90, 200)
