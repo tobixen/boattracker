@@ -474,6 +474,12 @@ count to the next timed point. Run it as part of the exporters' verification, ne
 
 ## Smaller items
 
+* **`time_and_positions`: a phone day drops the journey's later legs.** Found 2026-11-27 on
+  2025-08-29: the phone covers the morning move to Zeyport, so the day is `generated from
+  phone`, and the 18:40 UTC return to Cerrapasa (fix `6755398654608995`, plotter Track 52 s3,
+  no phone that evening) is left out. The morning departure is also reported at the
+  *evening* anchor position (40.99548,28.93649) instead of the 08-28 one (40.99832,28.93550),
+  326 m apart. Diary section left as it was; fix with a test on this day.
 * **`time_and_positions`: a name is taken from PLACES.md within 1000 m.** In Lake Varna that
   named an afloat stop on 2025-05-11 "Tortuga land-stay position", the spot ashore 620 m
   away, until the owner named the spot itself. 1000 m is wider than a bay; something like

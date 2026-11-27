@@ -523,7 +523,7 @@ shows real boat movement:
 
 | Date | Heading | Boat-like movement | Notes |
 |---|---|---|---|
-| 2025-08-29 | `- Istanbul` | **19.5 nm** over 205 on-track phone fixes | far more than the 2.8 nm segment dated above — there is more Istanbul sailing that day still to recover |
+| 2025-08-29 | `- Istanbul` | **19.5 nm** over 205 on-track phone fixes | far more than the 2.8 nm segment dated above. **Resolved 2026-11-27:** the rest was Track 52 s1 and s5, matched onto 08-29 by phone fixes at the shared Cerrapasa anchorage. s1 is the 08-28 approach, s3 the 08-29 return, s5 the 08-30 Bosphorus; `journey/NFL-EXPORT-LOG.md`, 2026-11-27 |
 
 Seven further days were flagged and then rejected: 2025-11-09, 2025-11-22,
 2026-04-27, 2026-04-29, 2026-05-03, 2026-05-09 and 2026-05-19 all fall inside the
