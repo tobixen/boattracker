@@ -469,7 +469,11 @@ def passages(pts: list[Pt], d0: float, d1: float, next_d0: float, at_sea: Iterab
             if k >= 0:
                 cands = [fixes[k], *cands]
             near = [(hav(pts[i][1:3], f), f) for f in cands for i in (s[0], s[1])]
-            best = min(near, default=(9e9, None), key=lambda x: x[0])
+            # a fix from after the boat left says where it lay next, maybe a few hundred
+            # metres off in the same bay (2025-08-29); take it only when nothing else is near
+            before = [x for x in near if x[1][2] <= pts[s[1]].hi + 3600]
+            best = min([x for x in before if x[0] < anchor_m] or near, default=(9e9, None),
+                       key=lambda x: x[0])
             if best[0] < anchor_m:
                 kept.append((s, (best[1][0], best[1][1]), best[1][2]))
         # two stops inside one anchorage can both lie within reach of its fix: one stop
@@ -591,6 +595,59 @@ def retime(legs: list[Leg], phone: list[Leg], match_m: float = 1000,
     return out
 
 
+def with_missed(phone: list[Leg], journey: list[Leg], earlier: Iterable[Leg] = (),
+                points: Iterable[Pt] = (), match_m: float = 1000,
+                same_move: float = 3*3600) -> list[Leg]:
+    """The phone's legs, plus the journey's moves that chain on before or after them.
+
+    A phone that ran for the morning's move and was off for the evening's has the day's
+    first leg to the minute and no idea of the second (2025-08-29, Istanbul). A journey leg
+    is added only when all of these hold:
+
+    * it is no move of the phone's, nor of `earlier` days' legs;
+    * the phone's `points` do not have the boat at its destination within its window (a
+      move the phone saw on a hand-maintained day, 2026-11-09/10);
+    * it is half a mile or more;
+    * both its windows lie outside the time the phone's legs cover;
+    * it joins up: it ends where the phone's first leg starts, or starts where its last leg
+      ends, or chains on to one that does. The first leg that does not join ends the chain,
+      so a journey window that contradicts the phone's (2026-07-19) is left out.
+
+    A move between two of the phone's legs is never filled in: the sources never interleave
+    (see `retime`)."""
+    if not phone:
+        return journey
+    phone = sorted(phone, key=lambda g: g.dep_lo)
+    known = list(phone) + list(earlier)
+    first, last = phone[0].dep_lo, phone[-1].arr_hi
+
+    def same(g):
+        return any(hav(p.a, g.a) <= match_m and hav(p.b, g.b) <= match_m
+                   and p.dep_lo - g.arr_hi < same_move and g.dep_lo - p.arr_hi < same_move
+                   for p in known)
+    pts = list(points)
+
+    def seen(g):
+        # within half the leg of its end, so points still at its start never count
+        r = min(match_m, g.line/2)
+        return any(g.dep_lo <= p.t <= g.arr_hi and hav((p.lat, p.lon), g.b) <= r for p in pts)
+    # under half a mile is anchor swing
+    cand = [g for g in journey if not same(g) and not seen(g) and g.line >= NM/2]
+    before, at = [], phone[0].a
+    for g in sorted((g for g in cand if g.arr_hi <= first), key=lambda g: -g.arr_hi):
+        if hav(g.b, at) > match_m:
+            break  # a leg that does not lead on contradicts the phone; nothing before it counts
+        before.append(g)
+        at = g.a
+    after, at = [], phone[-1].b
+    for g in sorted((g for g in cand if g.dep_lo >= last), key=lambda g: g.dep_lo):
+        if hav(g.a, at) > match_m:
+            break
+        after.append(g)
+        at = g.b
+    return before[::-1] + phone + after
+
+
 def render(leg: Leg, name_a: str, name_b: str) -> list[str]:
     dep = _when(leg.dep_lo, leg.dep_hi)
     if leg.tmax - leg.tmin <= 1800:
@@ -650,6 +707,9 @@ def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_path
     sections, draft = {}, []
     # a move from one fix to the next is one leg: the first passage day to report it keeps it
     reported: set[tuple[float, float]] = set()
+    # every day's legs so far: a phone leg and the journey's copy of the same move can anchor
+    # on different fixes, so `reported` does not always catch the copy
+    earlier: list[Leg] = []
 
     def _key(g):
         return (g.dep_fix, g.arr_fix) if g.dep_fix is not None and g.arr_fix is not None else None
@@ -675,11 +735,12 @@ def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_path
                 _worst(ph_legs) <= 2*3600 or (_worst(ph_legs) < _worst(legs) and len(ph_legs) >= len(legs))):
             # the phone's worth is its precision; wide windows mean it was off for a passage,
             # and then the boat's own track wins unless it is vaguer still
-            legs = ph_legs
+            legs = with_missed(ph_legs, legs, earlier, ph)
         else:
             # but a phone that ran for one move of the day still times that move
             legs = retime_ends(retime(legs, [g for g in ph_legs if not _walking(g)]), ph)
         reported.update(_key(g) for g in legs if _key(g) is not None)
+        earlier += legs
         if not legs:
             draft.append(f"\n{h}\n\n<!-- no passage found in the track data -->")
             continue
