@@ -68,6 +68,11 @@ track, interquartile range ±0.1–0.2 s:
 | Track 8 .. 19 | 2025-02-21 .. 03-09 | **2.0 s per point** | irregular, ~2.5–4 s and up |
 | Track 20 .. 67W | 2025-03-09 .. 2026-08 | **5.0 s per point** | irregular, from ~5 s to several minutes |
 
+**Only Track 8 on can be counted.** Before 2025-02-21 the plotter logged "by distance and
+time", a mode that could not be configured, so the ~210 s above is not a clock. The owner
+then set time-based logging, every 2 s. The change to every 5 s at Track 20 was probably
+because the plotter could not handle points that dense. (The owner, 2026-11-27.)
+
 The owner's setting is "every 5 seconds", and that is what the plotter does while moving.
 At anchor it lays far fewer points and at no fixed rate. The most likely reading is a
 time trigger that also needs some minimum movement. A boat swinging on its anchor

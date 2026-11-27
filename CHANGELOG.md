@@ -13,6 +13,11 @@ making this a python project rather than a directory of scripts.
 
 ### Added
 
+- `boattracker.nfl.date_segments` writes down which day each Raymarine plotter segment was
+  recorded, in a ledger the owner can correct by hand. It dates from the phone track,
+  photographs, journey fixes, diary headings and export file names, in that order of
+  trust, and keeps the dates in the plotter's own order, which also dates a segment lying
+  between two of one day.
 - `tracker_archive --legs` cuts the raw feed into one leg per passage, stop to stop across
   the whole date range, with no cut at midnight or on the clock hour, which is the owner's
   rule for journey fixes since 2026-08-14. `--split-at UTC` (repeatable) also cuts a leg at

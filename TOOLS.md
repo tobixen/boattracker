@@ -91,6 +91,7 @@ Two generations of script live here, and the difference matters:
 | `add_fixes.py` | backdated position fixes, e.g. at a berth so a chapter boundary renders there. **Write the UTC offset into the plan** — a naive timestamp is read as local time |
 | `omaps_export.py` | the Organic Maps phone export (.kmz/.kml) as timestamped fixes; absorbs the mixed namespaces and the phone's clock glitches |
 | `import_phone_export.py` | **the phone export into version control.** Unpacks each phone's newest `.kmz` from the Syncthing mirrors into its own git repository beside the corpus, one file per phone and one commit per export, and **refuses an export that has lost positions the committed copy holds** — the export is cumulative, so shrinkage means something upstream lost data |
+| `date_segments.py` | **the plotter segment ledger**, `<journey>/plotter-segments.tsv`: which day each Raymarine segment was recorded, from the phone, photographs, journey fixes, diary headings and export names, kept in plotter order. Rows the owner dates (`dated_by` = `owner`) and every note survive a rerun, and bound their neighbours |
 | `timestamp_segments.py` | **plotter geometry + phone clock.** Order-aware dating of untimestamped `<trkseg>`s by Kendall's tau, distance-proportional interpolation, and `drop_off_planet()` for the segments the plotter records in Peru |
 
 
