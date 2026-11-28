@@ -421,10 +421,19 @@ def _path_len(pts: list[Pt], a: int, b: int) -> float:
     return sum(hav(q[x][1:3], q[x+1][1:3]) for x in range(len(q)-1))
 
 
+def _at_seam(pts: list[Pt], stop, rollovers) -> bool:
+    """Whether a stop lies at a plotter seam of its own days (a day either side)."""
+    t = pts[stop[0]].t
+    days = {D.datetime.fromtimestamp(t + k*86400, UTC).date().isoformat() for k in (-1, 0, 1)}
+    return any(day in days and hav(p[1:3], (la, lo)) < plotter_clock.ROLLOVER_M
+               for la, lo, day in rollovers for p in pts[stop[0]:stop[1]+1])
+
+
 def passages(pts: list[Pt], d0: float, d1: float, next_d0: float, at_sea: Iterable[LatLon] = (),
              radius: float = 400, fold: float = 2*3600, fold_slack: float = 24*3600,
              fixes: list[tuple[float, float, float]] | None = None, anchor_m: float = 500,
-             anchor_days: float = 2) -> list[Leg]:
+             anchor_days: float = 2,
+             rollovers: Iterable[tuple[float, float, str | None]] = ()) -> list[Leg]:
     """The legs departing within [d0, d1).
 
     A short stop within `radius` of an `at_sea` position is no stop: the owner has judged it
@@ -433,7 +442,10 @@ def passages(pts: list[Pt], d0: float, d1: float, next_d0: float, at_sea: Iterab
     neighbouring stops - a hole in the data mid-passage leaves hours, while a sound the boat
     lay in for days leaves days. The measured stay includes the approach inside the stop
     radius, so a crawl at half a knot already reads as forty minutes; hence hours rather
-    than the thirty minutes a general offshore rule would use.
+    than the thirty minutes a general offshore rule would use. Such a stop with no stay
+    measured, at one of the plotter's `rollovers` (lat, lon, ledger day) from within a day
+    of it, is no stop however long it may have been: the fix there is the seam between two
+    plotter tracks (2025-07-25, off Pomorie).
 
     With `fixes` - the journey's fixes as (lat, lon, t) - a stop counts only when one lies
     within `anchor_m` of it, within `anchor_days` of its time or as the latest fix before
@@ -444,6 +456,7 @@ def passages(pts: list[Pt], d0: float, d1: float, next_d0: float, at_sea: Iterab
     if len(pts) < 2:
         return []
     st = stops(pts)
+    rollovers = list(rollovers)
     # a fix in mid-passage looks like a stop; drop it unless a dwell was measured or the
     # times leave no room for the boat to have passed straight through
     k = 1
@@ -457,6 +470,7 @@ def passages(pts: list[Pt], d0: float, d1: float, next_d0: float, at_sea: Iterab
         offshore = any(hav(pts[st[k][0]][1:3], a) < radius or hav(pts[st[k][1]][1:3], a) < radius
                        for a in at_sea)
         if ((stay is None and slack < 2*3600)
+                or (offshore and stay is None and _at_seam(pts, st[k], rollovers))
                 or (offshore and (stay < fold if stay is not None else slack < fold_slack))):
             del st[k]
             continue
@@ -840,21 +854,31 @@ def _counted(plotter, timed_pts: list[Pt], lo: float, hi: float) -> dict[str, li
     return out
 
 
-def load_plotter(ledger: str, corpus: Iterable[str]) -> list[tuple[str, int, str, list]]:
-    """The dated segments of the plotter segment ledger, with their points from the corpus."""
+def load_plotter(ledger: str, corpus: Iterable[str]
+                 ) -> tuple[list[tuple[str, int, str, list]], list[tuple[float, float, str | None]]]:
+    """The dated segments of the plotter segment ledger, with their points from the corpus,
+    and the plotter's rollovers (`plotter_clock.rollovers`) across the whole corpus, each
+    with its ledger day."""
     from boattracker.nfl import date_segments, timestamp_segments
-    if not os.path.exists(ledger):
-        return []
-    rows = {k: r for k, r in date_segments.read_ledger(ledger).items()
-            if r.date and plotter_clock.step(r.track)}
     found = date_segments.dedupe([(f, sg) for f in corpus for sg in timestamp_segments.load_segments(f)])
+    seams = plotter_clock.rollovers([(sg.track, sg.idx, sg.points) for _f, sg in found
+                                     if plotter_clock.step(sg.track)])
+    if not os.path.exists(ledger):
+        return [], [(la, lo, None) for la, lo in seams]
+    ledger_rows = date_segments.read_ledger(ledger)
+    # a seam's day is its full track's last segment's, from the ledger
+    ends = {tuple(sg.points[-1]): (sg.track, sg.idx) for _f, sg in found if sg.points}
+    dated = [(la, lo, getattr(ledger_rows.get(ends.get((la, lo))), 'date', '') or None)
+             for la, lo in seams]
+    rows = {k: r for k, r in ledger_rows.items() if r.date and plotter_clock.step(r.track)}
     return [(sg.track, sg.idx, rows[(sg.track, sg.idx)].date, sg.points)
-            for _f, sg in found if (sg.track, sg.idx) in rows]
+            for _f, sg in found if (sg.track, sg.idx) in rows], dated
 
 
 def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_paths: Iterable[str],
              photos: str | None, places_path: str,
-             plotter: Iterable[tuple[str, int, str, list]] = ()) -> tuple[Sections, list[str]]:
+             plotter: Iterable[tuple[str, int, str, list]] = (),
+             rollovers: Iterable[tuple[float, float, str | None]] = ()) -> tuple[Sections, list[str]]:
     """The sections, keyed by day, and the draft text for review.
 
     `plotter` is the dated plotter segments, (track, index, day, points), from the segment
@@ -909,8 +933,9 @@ def generate(diary_text: str, frm: str, to: str, *, journey: Journey, phone_path
         bt = [p for p in boat if w0 <= p.t <= w1]
         # the phone is dense where it ran; it is useless where it was off or ashore
         ph_day = [p for p in ph if d0 <= p.t <= d1]
-        legs = unreported(passages(bt, d0, d1, next_d0, at_sea, fixes=fixes))
-        ph_legs = unreported(passages(ph, d0, d1, next_d0, at_sea, fixes=fixes)) if len(ph_day) >= 100 else []
+        legs = unreported(passages(bt, d0, d1, next_d0, at_sea, fixes=fixes, rollovers=rollovers))
+        ph_legs = (unreported(passages(ph, d0, d1, next_d0, at_sea, fixes=fixes, rollovers=rollovers))
+                   if len(ph_day) >= 100 else [])
         if ph_legs and not any(_walking(g) for g in ph_legs) and (
                 _worst(ph_legs) <= 2*3600 or (_worst(ph_legs) < _worst(legs) and len(ph_legs) >= len(legs))):
             # the phone's worth is its precision; wide windows mean it was off for a passage,
@@ -1041,12 +1066,13 @@ def main(argv: list[str] | None = None) -> None:
     with open(a.diary) as f:
         text = f.read()
     journey = Journey(os.path.join(config.JOURNEY, 'journey-snapshot.json'))
+    plotter, seams = load_plotter(os.path.join(config.JOURNEY, 'plotter-segments.tsv'),
+                                  sorted(glob.glob(os.path.join(config.DATA, 'Tracks*.gpx'))))
     sections, draft = generate(text, a.frm, a.to, journey=journey,
                                phone_paths=a.phone or _default_phone_paths(),
                                photos=config.PHOTOS,
                                places_path=os.path.join(config.JOURNEY, 'PLACES.md'),
-                               plotter=load_plotter(os.path.join(config.JOURNEY, 'plotter-segments.tsv'),
-                                                    sorted(glob.glob(os.path.join(config.DATA, 'Tracks*.gpx')))))
+                               plotter=plotter, rollovers=seams)
     print('\n'.join(draft))
     print("\n## Passages in the track data on days without a passage heading\n")
     print('\n'.join(journey.unheaded(text, a.frm, a.to)))

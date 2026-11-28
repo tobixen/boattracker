@@ -173,8 +173,10 @@ an independent measurement. There are two kinds:
   them down.
 * **hand-maintained** — any other note. In `diary-2026.md`: 07-26, 08-06 (the Kaliakra
   passage), 08-07 (matched against the phone; seconds are meaningful), and 09-01, 09-02 (the
-  phone track, filled in afterwards). In `diary-202401.md`: 2025-09-06 (the Port Palace
-  arrival is the owner's recollection) and 2025-09-15 (the haul-out). Older hand-pinned
+  phone track, filled in afterwards), 11-03 and 11-04 (the round trip towards Varna, from the
+  phone and the point count; `TODO.md`). In `diary-202401.md`: 2025-07-25 (the departure is
+  the owner's estimate), 2025-09-06 (the Port Palace arrival is the owner's recollection) and
+  2025-09-15 (the haul-out). Older hand-pinned
   blocks of 07-29 .. 08-05 were times "approximate to within the half hour" with padded
   seconds; those days are generated now. `journey/archive/export_aug2026.py` holds the
   derivation of the August 2026 ones.
@@ -208,7 +210,8 @@ extra); every time written is UTC.
 
 **PLACES.md reserved names** are the owner's verdicts, one spot at a time: `at sea` folds a
 short stop there into the passage (slow sailing; a leg-split fix mid-passage), and a longer
-one stays labelled `at sea`; `ashore (not the boat)` drops track points within 300 m. An
+one stays labelled `at sea`, unless it is a fix with no stay measured at a seam where a full
+plotter track rolled over within a day of it: that folds however long the room for it; `ashore (not the boat)` drops track points within 300 m. An
 unnamed stop prints `(XXX)` — ask the owner, and add the name, `at sea` or `ashore` to
 PLACES.md, then rerun. Expect each answer to expose the next point over until a land/sea
 check exists (`TODO.md`).

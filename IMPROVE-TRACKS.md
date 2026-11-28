@@ -292,9 +292,11 @@ old tracks, so most of a fresh export is already held. Add the new file to the i
 `RAYMARINE-GPX.md`.
 
 Watch for tracks at **~10 000 points** (9981, 9985, 9987 have all been seen). That is the
-plotter's cap, and a full track means recording *stopped* rather than rolled over — the gap that
-follows begins where the boat was under way, unlike a switched-off-plotter gap which begins at a
-berth.
+plotter's cap. A full track usually rolls over: the next track starts where it stopped, under
+way as often as not, and `plotter_clock.rollovers` finds those seams (49 of them by
+2026-11). Sometimes recording stopped instead (Track 60 to 61, `RAYMARINE-GPX.md`): then the
+gap that follows begins where the boat was under way, unlike a switched-off-plotter gap,
+which begins at a berth.
 
 ## 3. Find what is missing
 

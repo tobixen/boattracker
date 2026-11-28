@@ -820,3 +820,22 @@ def test_times_under_way_never_cross():
     tmin, tmax = tp._under_way(g, 5000, 5100, 0, 10, 100, 200)
     assert tmin <= tmax
     assert (tmin, tmax) == (90, 200)
+
+
+def test_an_open_water_stop_where_the_plotter_rolled_over_is_sailing():
+    # 2025-07-25: Track 36 ran out of points off Pomorie and Track 37 went on from the same
+    # spot; the journey's fix there is that seam, not a 6.5-hour stop in Burgas Bay
+    d = "2024-11-"
+    pts = (journey_line(d + "08T06:00", d + "08T16:00", A, MID)
+           + journey_line(d + "08T16:00", d + "10T13:00", MID, B)
+           + [tp.Pt(ts(d + "10T13:00"), *B, "nfl", ts(d + "10T13:00"), ts(d + "10T13:00"), True)])
+    d0, d1 = tp.day_window("2024-11-08", "Europe/Athens")
+    assert len(tp.passages(pts, d0, d1, 9e12, at_sea=[MID])) == 2   # a fix, two days' room
+    seam = (*MID, "2024-11-08")
+    legs = tp.passages(pts, d0, d1, 9e12, at_sea=[MID], rollovers=[seam])
+    assert len(legs) == 1 and tp.hav(legs[0].b, B) < 400
+    # a rollover in a harbour, not the owner's open water, is no reason to fold anything
+    assert tp.hav(tp.passages(pts, d0, d1, 9e12, rollovers=[seam])[0].b, MID) < 400
+    # nor is a seam the boat passed a month before, or on an undated track
+    for other in ((*MID, "2024-10-08"), (*MID, None)):
+        assert len(tp.passages(pts, d0, d1, 9e12, at_sea=[MID], rollovers=[other])) == 2

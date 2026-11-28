@@ -43,6 +43,9 @@ WIGGLE = 3.0         # ... or this many times further along the points than net 
 SLOW_GAP_S = 600     # the longest a short gap outside a stop may have taken
 ANCHOR_M = 15        # a timed fix this close to a plotter point times it
 ANCHOR_S = 10        # ... to within this: 15 m at a few knots, plus the fix's own jitter
+TRACK_POINTS = 10_000  # the plotter starts a new track when one reaches this many points
+ROLLOVER_SLACK = 20  # ... a few short of it here, the gaps between segments cost some
+ROLLOVER_M = 100     # ... and the next track starts this close to where it stopped
 
 
 def step(track: str) -> float | None:
@@ -223,6 +226,45 @@ def _ordered(pts, fixes, radius: float) -> dict[int, float]:
         out[hits[h][0]] = hits[h][1]
         h = prev[h]
     return dict(sorted(out.items()))
+
+
+def rollovers(segments) -> list[tuple[float, float]]:
+    """Where a full track ran out of points and the next went on: (lat, lon) of each seam.
+
+    `segments` is (track, index, points) in plotter order. A track of TRACK_POINTS ends
+    wherever the boat is, under way as often as not, so the seam is no stop; a short track
+    ending where the next begins is the plotter switched off and on, which may well be.
+    Only a seam the plotter was moving through counts: a full track can end at anchor too.
+    """
+    tracks: list[tuple[str, list]] = []
+    for track, _idx, pts in segments:
+        if not pts:
+            continue
+        if tracks and tracks[-1][0] == track:
+            tracks[-1][1].append(pts)
+        else:
+            tracks.append((track, [pts]))
+    out = []
+    for (t0, segs), (t1, nxt) in zip(tracks, tracks[1:]):
+        if step(t0) is None or step(t1) is None:
+            continue  # the named tracks before Track 8 are no clock, and none is full
+        if (sum(len(p) for p in segs) >= TRACK_POINTS - ROLLOVER_SLACK
+                and hav(segs[-1][-1], nxt[0][0]) <= ROLLOVER_M
+                and _moving_at(segs[-1], -1, step(t0))
+                and _moving_at(nxt[0], 0, step(t1))):
+            out.append(tuple(segs[-1][-1]))
+    return out
+
+
+def _moving_at(pts, end: int, step_s: float) -> bool:
+    """Whether the plotter was under way at the first (0) or last (-1) point of pts: a
+    minute's worth of points getting somewhere. Fewer points than that cannot tell, and
+    count as under way; the full track and the shared position already say a seam."""
+    k = max(2, round(STOP_SECONDS / step_s))
+    tail = pts[-k-1:] if end == -1 else pts[:k+1]
+    if len(tail) < 2:
+        return True
+    return hav(tail[0], tail[-1]) >= STILL_NET_M * (len(tail) - 1) / k
 
 
 @dataclass

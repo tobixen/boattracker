@@ -161,3 +161,35 @@ def test_two_fixes_on_one_point_count_once_when_ordering():
              (pts[10][0], pts[10][1], 102.0),
              (pts[30][0], pts[30][1], 50.0), (pts[40][0], pts[40][1], 60.0)]
     assert pc.anchors(pts, fixes) == {30: 50.0, 40: 60.0}
+
+
+def test_a_track_that_ran_out_of_points_rolls_over_into_the_next():
+    # the plotter starts a new track at 10 000 points, wherever the boat is
+    a = moving(9990)
+    b = moving(100, start=a[-1])
+    c = moving(100, start=(41.5, 28.9))
+    segs = [("Track 36", 0, a), ("Track 37", 0, b), ("Track 38", 0, c)]
+    assert pc.rollovers(segs) == [a[-1]]
+    # a short track ending where the next begins is the plotter switched off and on
+    assert pc.rollovers([("Track 36", 0, a[:500]), ("Track 37", 0, b)]) == []
+
+
+def test_a_track_that_ran_out_of_points_at_anchor_is_no_seam_under_way():
+    # 2025-08-23, Kardirga Koyu: Track 46 filled up while the boat lay at anchor overnight
+    a = moving(9890) + still(100, moving(9890)[-1])
+    b = still(50, a[-1]) + moving(100, start=a[-1])
+    assert pc.rollovers([("Track 46", 0, a), ("Track 47", 0, b)]) == []
+
+
+def test_a_seam_with_a_short_first_segment_after_it_still_counts():
+    # the next track's first segment can be 11 points long; too short to tell, not still
+    a = moving(9990)
+    b = moving(8, start=a[-1])
+    assert pc.rollovers([("Track 36", 0, a), ("Track 37", 0, b), ("Track 37", 1, moving(50))]) == [a[-1]]
+
+
+def test_slow_sailing_on_a_two_second_track_is_moving_at_a_seam():
+    # Tracks 8-19 log every 2 s: under 2 kn every gap is under STILL_M, yet the boat moves
+    a = moving(9990, metres=1.5)
+    b = moving(100, start=a[-1], metres=1.5)
+    assert pc.rollovers([("Track 12", 0, a), ("Track 13", 0, b)]) == [a[-1]]
