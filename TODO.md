@@ -472,6 +472,22 @@ that time cannot measure, because the plotter keeps no time at anchor, is still 
 count to the next timed point. Run it as part of the exporters' verification, next to
 `find_backtracks --connectors --windows`.
 
+## A day out and back to the same berth reads as a stop
+
+**Found 2026-11-28.** 2026-11-03/04, Nessebar towards Varna and back, 75 nm: the journey has
+it as one line, from the 11-03 08:25 fix at the Nessebar Sea Station to the 11-04 09:00
+Check in 20 m away, and `stops()` merges each stop into the one before while it lies within
+600 m of where that merged stop began, whatever was sailed between, so the 11-02 anchorage,
+both Sea Station visits and the night at the anchorage became one stop and the day got "no
+passage found". Guarding the merge on the sailed distance between (2 nm) finds the passage,
+but then it lands on the wrong day and place: the south anchorage and the Sea Station, 540 m
+apart between the track points (628 m between their fixes), still merge, and the line's
+vertex window (11-03 08:25 .. 11-04 09:00) reaches into 11-04, so the departure goes to
+11-04 from the anchorage. The merge distance down to ~250 m, under "Smaller items" below,
+would take the wrong place away; the day needs the guard as well. Both days are
+hand-maintained in `diary-2026.md` meanwhile, from the phone and the point count. The same
+line hides the night at the south anchorage, the case above.
+
 ## Smaller items
 
 * **`tracker_archive`: GPX names and mail subjects mix a local date with UTC times.** Both
